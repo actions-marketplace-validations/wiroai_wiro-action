@@ -5,9 +5,9 @@ import { USER_AGENT } from './version.js';
 /**
  * @typedef {object} RunApi
  * @property {(owner: string, project: string, body: object | FormData, timeoutMs?: number) => Promise<any>} run
- * @property {(taskToken: string) => Promise<any>} taskDetail
- * @property {(taskId: string) => Promise<any>} cancel
- * @property {(taskToken: string) => Promise<any>} kill
+ * @property {(taskToken: string, timeoutMs?: number) => Promise<any>} taskDetail
+ * @property {(taskId: string, timeoutMs?: number) => Promise<any>} cancel
+ * @property {(taskToken: string, timeoutMs?: number) => Promise<any>} kill
  * @property {(owner: string, project: string) => Promise<any>} toolDetail
  */
 
@@ -76,9 +76,9 @@ export function createRunApi({ apiUrl, apiKey, apiSecret, fetchImpl = fetch }) {
   return {
     run: (owner, project, body, timeoutMs = 300_000) =>
       post(`/Run/${encodeURIComponent(owner)}/${encodeURIComponent(project)}`, body, timeoutMs),
-    taskDetail: (taskToken) => post('/Task/Detail', { tasktoken: taskToken }),
-    cancel: (taskId) => post('/Task/Cancel', { taskid: taskId }),
-    kill: (taskToken) => post('/Task/Kill', { socketaccesstoken: taskToken }),
+    taskDetail: (taskToken, timeoutMs) => post('/Task/Detail', { tasktoken: taskToken }, timeoutMs),
+    cancel: (taskId, timeoutMs) => post('/Task/Cancel', { taskid: taskId }, timeoutMs),
+    kill: (taskToken, timeoutMs) => post('/Task/Kill', { socketaccesstoken: taskToken }, timeoutMs),
     toolDetail: (owner, project) => post('/Tool/Detail', { slugowner: owner, slugproject: project }),
   };
 }

@@ -140,6 +140,8 @@ permissions:
 
 jobs:
   alt-text:
+    # Pull requests from forks and from Dependabot don't receive repository secrets.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -153,7 +155,8 @@ jobs:
         run: |
           {
             echo 'images<<EOF'
-            git diff --name-only --diff-filter=AM "$BASE" HEAD -- '*.png' '*.jpg' '*.jpeg' '*.gif' '*.webp'
+            git -c core.quotePath=false diff --name-only --diff-filter=AM "$BASE" HEAD -- \
+              '*.png' '*.jpg' '*.jpeg' '*.gif' '*.webp'
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
@@ -195,6 +198,8 @@ permissions:
 
 jobs:
   summary:
+    # Pull requests from forks and from Dependabot don't receive repository secrets.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -274,7 +279,8 @@ For an API key only project, `api-key` is all you need. For a project that uses 
 
 - Keep the key in a secret. The action also masks it in the logs.
 - Treat model output as untrusted text. Pass it to scripts through `env:`, as the examples do, and don't write `${{ steps.<id>.outputs.text }}` inside a `run:` script. See [Security hardening for GitHub Actions](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions).
-- Workflows started by pull requests from forks don't receive secrets, so steps that need `WIRO_API_KEY` don't run for them.
+- Workflows started by pull requests from forks, or by Dependabot, don't receive repository secrets, so the action would stop there with an empty `api-key`. The pull request examples skip those runs with an `if:` condition on the job.
+- The action prints model answers to the log with workflow commands turned off, so a line such as `::error::` in an answer stays plain text.
 
 ## Self-hosted runners behind a proxy
 

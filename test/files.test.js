@@ -12,7 +12,15 @@ let workspace;
 before(async () => {
   workspace = await mkdtemp(path.join(tmpdir(), 'wiro-files-'));
   await mkdir(path.join(workspace, 'docs', 'img'), { recursive: true });
-  for (const file of ['README.md', 'docs/a.md', 'docs/b.md', 'docs/img/one.png', 'docs/img/two.jpg']) {
+  await mkdir(path.join(workspace, 'notes'), { recursive: true });
+  for (const file of [
+    'README.md',
+    'docs/a.md',
+    'docs/b.md',
+    'docs/img/one.png',
+    'docs/img/two.jpg',
+    'notes/[draft] café.md',
+  ]) {
     await writeFile(path.join(workspace, file), file);
   }
 });
@@ -30,6 +38,12 @@ describe('resolveFiles', () => {
     assert.deepEqual(shown(await resolveFiles(['docs/**/*.png', 'README.md'], workspace, 'files')), [
       'README.md',
       'docs/img/one.png',
+    ]);
+  });
+
+  it('takes a file that exists as it is, even with glob characters in its name', async () => {
+    assert.deepEqual(shown(await resolveFiles(['notes/[draft] café.md'], workspace, 'files')), [
+      'notes/[draft] café.md',
     ]);
   });
 
@@ -104,6 +118,18 @@ describe('downloadOutputs', () => {
     );
     assert.deepEqual((await readdir(dir)).sort(), ['0-1.png', '0.png', 'escape.png', 'from-url.png']);
     assert.deepEqual(await readFile(saved[0]), PNG);
+  });
+
+  it('never replaces files from an earlier step', async () => {
+    const dir = path.join(workspace, 'shared');
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, '0.png'), 'from step one');
+    const saved = await downloadOutputs([{ name: '0.png', url: `${mock.origin}/files/0.png` }], dir);
+    assert.deepEqual(
+      saved.map((file) => path.relative(dir, file)),
+      ['0-1.png'],
+    );
+    assert.equal(await readFile(path.join(dir, '0.png'), 'utf8'), 'from step one');
   });
 
   it('gives up after three tries', async () => {

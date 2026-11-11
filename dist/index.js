@@ -26481,6 +26481,7 @@ var require_dist = __commonJS({
 });
 
 // src/main.js
+import { randomUUID as randomUUID2 } from "node:crypto";
 import path9 from "node:path";
 
 // node_modules/@actions/core/lib/command.js
@@ -27036,7 +27037,7 @@ var LlmError = class extends Error {
 
 // src/files.js
 import { createWriteStream } from "node:fs";
-import { mkdir as mkdir2, rename as rename2, rm as rm2, stat as stat2 } from "node:fs/promises";
+import { lstat as lstat2, mkdir as mkdir2, rename as rename2, rm as rm2, stat as stat2 } from "node:fs/promises";
 import path6 from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -29662,16 +29663,12 @@ async function resolveFiles(patterns, workspace, label) {
   const found = /* @__PURE__ */ new Set();
   for (const pattern of include) {
     const absolute = path6.resolve(workspace, pattern);
-    if (!GLOB_CHARS.test(pattern)) {
-      const info2 = await stat2(absolute).catch(() => null);
-      if (!info2) throw new InputError(`${label}: \`${pattern}\` does not exist.`);
-      if (info2.isFile()) {
-        if (!exclude.length) {
-          found.add(absolute);
-          continue;
-        }
-      }
+    const info2 = await stat2(absolute).catch(() => null);
+    if (info2?.isFile() && !exclude.length) {
+      found.add(absolute);
+      continue;
     }
+    if (!info2 && !GLOB_CHARS.test(pattern)) throw new InputError(`${label}: \`${pattern}\` does not exist.`);
     const globber = await create([absolute, ...exclude].join("\n"), {
       matchDirectories: false,
       implicitDescendants: true,
@@ -29701,19 +29698,20 @@ function nameFromUrl(url) {
     return "";
   }
 }
-function uniqueName(name, used) {
-  if (!used.has(name.toLowerCase())) {
-    used.add(name.toLowerCase());
-    return name;
-  }
+async function freeName(dir, name, used) {
   const ext2 = path6.extname(name);
   const stem = name.slice(0, name.length - ext2.length);
-  for (let n = 1; ; n++) {
-    const candidate = `${stem}-${n}${ext2}`;
-    if (!used.has(candidate.toLowerCase())) {
-      used.add(candidate.toLowerCase());
-      return candidate;
-    }
+  for (let n = 0; ; n++) {
+    const candidate = n === 0 ? name : `${stem}-${n}${ext2}`;
+    const key = candidate.toLowerCase();
+    if (used.has(key)) continue;
+    const taken = await lstat2(path6.join(dir, candidate)).then(
+      () => true,
+      () => false
+    );
+    if (taken) continue;
+    used.add(key);
+    return candidate;
   }
 }
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -29729,7 +29727,8 @@ async function downloadFile(url, target, { fetchImpl = fetch, timeoutMs = 6e5, r
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);
       }
-      await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
+      await rm2(partial, { force: true });
+      await pipeline(Readable.fromWeb(response.body), createWriteStream(partial, { flags: "wx" }));
       await rename2(partial, target);
       return;
     } catch (err) {
@@ -29770,7 +29769,8 @@ async function downloadOutputs(outputs, dir, options = {}) {
   const saved = [];
   for (const [index, output] of outputs.entries()) {
     if (!output?.url) continue;
-    const name = uniqueName(
+    const name = await freeName(
+      dir,
       safeFileName(output.name) || safeFileName(nameFromUrl(output.url)) || `output-${index + 1}`,
       used
     );
@@ -29921,13 +29921,13 @@ import { openAsBlob } from "node:fs";
 import path7 from "node:path";
 var TERMINAL_STATUSES = /* @__PURE__ */ new Set(["task_postprocess_end", "task_cancel"]);
 var QUEUED_STATUSES = /* @__PURE__ */ new Set(["task_queue", "task_accept", "task_preprocess_start", "task_preprocess_end"]);
-var FILE_TYPES = /* @__PURE__ */ new Set(["fileinput", "multifileinput", "combinefileinput"]);
+var FILE_TYPES = /* @__PURE__ */ new Set(["fileinput", "multifileinput", "multifileinputdrop", "combinefileinput"]);
+var SINGLE_FILE_TYPES = /* @__PURE__ */ new Set(["fileinput"]);
+var REFUSAL_LIMIT_MS = 12e4;
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function urlFieldFor(id, type) {
   if (type === "fileinput") return `${id}Url`;
-  if (type === "multifileinput") {
-    return id.endsWith("Multiple") ? `${id.slice(0, -"Multiple".length)}UrlMultiple` : `${id}Url`;
-  }
+  if (type === "multifileinput" || type === "multifileinputdrop") return `${id.replace("Multiple", "")}UrlMultiple`;
   return void 0;
 }
 function formValue(value) {
@@ -29973,7 +29973,7 @@ async function buildMultipart({ params, files, types: types2, model }) {
     if (type && !FILE_TYPES.has(type)) {
       throw new InputError(`\`${id}\` is a ${type} parameter of ${model.id}, not a file parameter.`);
     }
-    if (type === "fileinput" && paths.length > 1) {
+    if (SINGLE_FILE_TYPES.has(type) && paths.length > 1) {
       throw new InputError(`\`${id}\` takes one file, but ${paths.length} match.`);
     }
     const urlField = urlFieldFor(id, type);
@@ -30029,9 +30029,9 @@ async function submitRun(api, model, body, deadline, log2, firstWaitMs = 5e3) {
     }
   }
 }
-async function stopTask(api, handle, log2) {
-  const cancel = ["Task/Cancel", () => api.cancel(handle.taskId)];
-  const kill = ["Task/Kill", () => api.kill(handle.token)];
+async function stopTask(api, handle, log2, { timeoutMs = 15e3 } = {}) {
+  const cancel = ["Task/Cancel", () => api.cancel(handle.taskId, timeoutMs)];
+  const kill = ["Task/Kill", () => api.kill(handle.token, timeoutMs)];
   const queued = !handle.status || QUEUED_STATUSES.has(handle.status);
   for (const [name, attempt] of queued ? [cancel, kill] : [kill, cancel]) {
     try {
@@ -30044,20 +30044,28 @@ async function stopTask(api, handle, log2) {
   }
   return false;
 }
-async function waitForTask(api, handle, { deadline, pollMs, timeoutMs, cancelOnTimeout, log: log2 }) {
+async function waitForTask(api, handle, { deadline, pollMs, timeoutMs, cancelOnTimeout, log: log2, refusalLimitMs = REFUSAL_LIMIT_MS }) {
+  const giveUp = async (reason) => {
+    let message2 = `Stopped waiting for task ${handle.taskId}: ${reason}`;
+    if (cancelOnTimeout) {
+      const stopped = await stopTask(api, handle, log2);
+      message2 += stopped ? " The task was stopped." : " The task could not be stopped, so it may still finish.";
+    }
+    return new TaskError(message2);
+  };
   let failures = 0;
-  let refusals = 0;
+  let refusingSince;
   for (; ; ) {
     let detail;
     try {
-      detail = await api.taskDetail(handle.token);
+      detail = await api.taskDetail(handle.token, Math.max(5e3, Math.min(6e4, deadline - Date.now())));
       failures = 0;
-      refusals = 0;
+      refusingSince = void 0;
     } catch (err) {
       if (err instanceof WiroApiError && (err.status === 401 || err.status === 403)) throw err;
       if (err instanceof WiroApiError && !err.retryable) {
-        refusals += 1;
-        if (refusals >= 5) throw err;
+        refusingSince ??= Date.now();
+        if (Date.now() - refusingSince >= refusalLimitMs) throw await giveUp(err.message);
       } else {
         failures += 1;
       }
@@ -30152,17 +30160,31 @@ function assertSucceeded(task, handle) {
     );
   }
 }
-async function runModel({ api, model, params, files, timeoutMs, pollMs, cancelOnTimeout, log: log2, onTask }) {
+async function runModel({
+  api,
+  model,
+  params,
+  files,
+  timeoutMs,
+  pollMs,
+  cancelOnTimeout,
+  log: log2,
+  onTask,
+  onSubmit,
+  refusalLimitMs
+}) {
   const deadline = Date.now() + timeoutMs;
   let body = params;
   if (Object.keys(files).length) {
     const types2 = await readParameterTypes(api, model, log2);
     body = await buildMultipart({ params, files, types: types2, model });
   }
-  const handle = await submitRun(api, model, body, deadline, log2);
+  const submitting = submitRun(api, model, body, deadline, log2);
+  onSubmit?.(submitting);
+  const handle = await submitting;
   onTask?.(handle);
   log2.info(`Started task ${handle.taskId} on ${model.id}.`);
-  const task = await waitForTask(api, handle, { deadline, pollMs, timeoutMs, cancelOnTimeout, log: log2 });
+  const task = await waitForTask(api, handle, { deadline, pollMs, timeoutMs, cancelOnTimeout, log: log2, refusalLimitMs });
   assertSucceeded(task, handle);
   const outputs = normalizeOutputs(task);
   const reason = finishReason(task);
@@ -30307,6 +30329,7 @@ async function runChat({
   const url = `${llmUrl.replace(/\/+$/, "")}/chat/completions`;
   for (let attempt = 1; ; attempt++) {
     let response;
+    let text;
     try {
       response = await fetchImpl(url, {
         method: "POST",
@@ -30319,13 +30342,15 @@ async function runChat({
         body: payload,
         signal: AbortSignal.timeout(Math.max(1e3, deadline - Date.now()))
       });
+      text = (await response.text()).trim();
     } catch (err) {
       if (err?.name === "TimeoutError") {
         throw new LlmError(`No answer from the LLM gateway within ${Math.round(timeoutMs / 1e3)} s.`);
       }
-      throw new LlmError(`Could not reach the LLM gateway: ${err?.message ?? err}`);
+      throw new LlmError(
+        response ? `The connection to the LLM gateway closed before the answer arrived: ${err?.message ?? err}` : `Could not reach the LLM gateway: ${err?.message ?? err}`
+      );
     }
-    const text = (await response.text()).trim();
     let data;
     try {
       data = text ? JSON.parse(text) : void 0;
@@ -30482,9 +30507,9 @@ function createRunApi({ apiUrl, apiKey, apiSecret, fetchImpl = fetch }) {
   }
   return {
     run: (owner, project, body, timeoutMs = 3e5) => post(`/Run/${encodeURIComponent(owner)}/${encodeURIComponent(project)}`, body, timeoutMs),
-    taskDetail: (taskToken) => post("/Task/Detail", { tasktoken: taskToken }),
-    cancel: (taskId) => post("/Task/Cancel", { taskid: taskId }),
-    kill: (taskToken) => post("/Task/Kill", { socketaccesstoken: taskToken }),
+    taskDetail: (taskToken, timeoutMs) => post("/Task/Detail", { tasktoken: taskToken }, timeoutMs),
+    cancel: (taskId, timeoutMs) => post("/Task/Cancel", { taskid: taskId }, timeoutMs),
+    kill: (taskToken, timeoutMs) => post("/Task/Kill", { socketaccesstoken: taskToken }, timeoutMs),
     toolDetail: (owner, project) => post("/Tool/Detail", { slugowner: owner, slugproject: project })
   };
 }
@@ -30504,20 +30529,33 @@ async function writeSummary(markdown) {
     debug(`Could not write the job summary: ${err.message}`);
   }
 }
-function stopTaskOnCancel(api, getHandle) {
+function printUntrusted(title, text) {
+  const token = randomUUID2();
+  startGroup(title);
+  info(`::stop-commands::${token}`);
+  info(text);
+  info(`::${token}::`);
+  endGroup();
+}
+var sleep4 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function stopTaskOnCancel(api, getHandle, getPending) {
   let stopping = false;
   const onSignal = (signal) => {
     if (stopping) return;
     stopping = true;
     const exit = () => process.exit(1);
-    const handle = getHandle();
-    if (!handle || handle.status && TERMINAL_STATUSES.has(handle.status)) {
-      exit();
-      return;
-    }
-    warning(`Received ${signal}, stopping task ${handle.taskId}.`);
-    setTimeout(exit, 5e3).unref();
-    stopTask(api, handle, log).finally(exit);
+    setTimeout(exit, 9e3).unref();
+    (async () => {
+      let handle = getHandle();
+      const pending = getPending();
+      if (!handle && pending) {
+        warning(`Received ${signal} while the run was starting, waiting for its task to stop it.`);
+        handle = await Promise.race([pending.catch(() => void 0), sleep4(6e3).then(() => void 0)]);
+      }
+      if (!handle || handle.status && TERMINAL_STATUSES.has(handle.status)) return;
+      warning(`Received ${signal}, stopping task ${handle.taskId}.`);
+      await stopTask(api, handle, log, { timeoutMs: 2500 });
+    })().finally(exit);
   };
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
@@ -30554,7 +30592,12 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
   const apiUrl = parseBaseUrl(input("api-url"), "api-url", DEFAULTS["api-url"]);
   const api = createRunApi({ apiUrl, apiKey, apiSecret });
   let handle;
-  const unwatch = cancelOnTimeout ? stopTaskOnCancel(api, () => handle) : () => {
+  let pending;
+  const unwatch = cancelOnTimeout ? stopTaskOnCancel(
+    api,
+    () => handle,
+    () => pending
+  ) : () => {
   };
   let result;
   try {
@@ -30567,6 +30610,9 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
       pollMs,
       cancelOnTimeout,
       log,
+      onSubmit: (submitting) => {
+        pending = submitting;
+      },
       onTask: (started) => {
         handle = started;
         setSecret(started.token);
@@ -30590,11 +30636,7 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
   info(`Task ${result.handle.taskId} succeeded. Cost: $${result.cost || "0"}.`);
   for (const url of result.urls) info(`Output: ${url}`);
   for (const file of saved) info(`Saved: ${file}`);
-  if (result.text) {
-    startGroup("Text");
-    info(result.text);
-    endGroup();
-  }
+  if (result.text) printUntrusted("Text", result.text);
   if (summary2) {
     await writeSummary(
       modelSummary({
@@ -30625,18 +30667,14 @@ async function llmMode({ apiKey, apiSecret, workspace }) {
   }
   const body = await buildChatRequest({ model: model.id, prompt, system, extra, files, workspace });
   if (files.length) {
-    info(`Attached ${files.length} file(s): ${files.map((file) => displayPath(file, workspace)).join(", ")}`);
+    printUntrusted(`Attached ${files.length} file(s)`, files.map((file) => displayPath(file, workspace)).join("\n"));
   }
   const result = await runChat({ llmUrl, apiKey, apiSecret, body, timeoutMs, log });
   setOutput("text", result.text);
   setOutput("cost", result.cost);
   setOutput("response", JSON.stringify(result.response));
   info(`${model.id} answered. Cost: $${result.cost || "0"}.`);
-  if (result.text) {
-    startGroup("Answer");
-    info(result.text);
-    endGroup();
-  }
+  if (result.text) printUntrusted("Answer", result.text);
   if (summary2) {
     await writeSummary(
       llmSummary({
@@ -30651,7 +30689,12 @@ async function llmMode({ apiKey, apiSecret, workspace }) {
 }
 async function run() {
   try {
-    const apiKey = getInput("api-key", { required: true });
+    const apiKey = getInput("api-key");
+    if (!apiKey) {
+      throw new InputError(
+        "`api-key` is empty. Pass it from a secret, for example `api-key: ${{ secrets.WIRO_API_KEY }}`. Workflows started by pull requests from forks, or by Dependabot, don't receive repository secrets."
+      );
+    }
     setSecret(apiKey);
     const apiSecret = getInput("api-secret");
     if (apiSecret) setSecret(apiSecret);

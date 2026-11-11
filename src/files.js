@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -79,16 +79,13 @@ export async function resolveFiles(patterns, workspace, label) {
   const found = new Set();
   for (const pattern of include) {
     const absolute = path.resolve(workspace, pattern);
-    if (!GLOB_CHARS.test(pattern)) {
-      const info = await stat(absolute).catch(() => null);
-      if (!info) throw new InputError(`${label}: \`${pattern}\` does not exist.`);
-      if (info.isFile()) {
-        if (!exclude.length) {
-          found.add(absolute);
-          continue;
-        }
-      }
+    // A file that exists is taken as it is, even when its name has [ ] or other glob characters.
+    const info = await stat(absolute).catch(() => null);
+    if (info?.isFile() && !exclude.length) {
+      found.add(absolute);
+      continue;
     }
+    if (!info && !GLOB_CHARS.test(pattern)) throw new InputError(`${label}: \`${pattern}\` does not exist.`);
     const globber = await glob.create([absolute, ...exclude].join('\n'), {
       matchDirectories: false,
       implicitDescendants: true,
@@ -133,19 +130,21 @@ function nameFromUrl(url) {
  * @param {string} name
  * @param {Set<string>} used
  */
-function uniqueName(name, used) {
-  if (!used.has(name.toLowerCase())) {
-    used.add(name.toLowerCase());
-    return name;
-  }
+async function freeName(dir, name, used) {
   const ext = path.extname(name);
   const stem = name.slice(0, name.length - ext.length);
-  for (let n = 1; ; n++) {
-    const candidate = `${stem}-${n}${ext}`;
-    if (!used.has(candidate.toLowerCase())) {
-      used.add(candidate.toLowerCase());
-      return candidate;
-    }
+  for (let n = 0; ; n++) {
+    const candidate = n === 0 ? name : `${stem}-${n}${ext}`;
+    const key = candidate.toLowerCase();
+    if (used.has(key)) continue;
+    // Never replace a file that is already there, for example from an earlier step.
+    const taken = await lstat(path.join(dir, candidate)).then(
+      () => true,
+      () => false,
+    );
+    if (taken) continue;
+    used.add(key);
+    return candidate;
   }
 }
 
@@ -169,7 +168,9 @@ export async function downloadFile(url, target, { fetchImpl = fetch, timeoutMs =
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);
       }
-      await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
+      // `wx` creates a new file and fails rather than write through a link left at that path.
+      await rm(partial, { force: true });
+      await pipeline(Readable.fromWeb(response.body), createWriteStream(partial, { flags: 'wx' }));
       await rename(partial, target);
       return;
     } catch (err) {
@@ -232,7 +233,8 @@ export async function downloadOutputs(outputs, dir, options = {}) {
   const saved = [];
   for (const [index, output] of outputs.entries()) {
     if (!output?.url) continue;
-    const name = uniqueName(
+    const name = await freeName(
+      dir,
       safeFileName(output.name) || safeFileName(nameFromUrl(output.url)) || `output-${index + 1}`,
       used,
     );

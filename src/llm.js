@@ -156,6 +156,7 @@ export async function runChat({
   const url = `${llmUrl.replace(/\/+$/, '')}/chat/completions`;
   for (let attempt = 1; ; attempt++) {
     let response;
+    let text;
     try {
       response = await fetchImpl(url, {
         method: 'POST',
@@ -168,15 +169,19 @@ export async function runChat({
         body: payload,
         signal: AbortSignal.timeout(Math.max(1_000, deadline - Date.now())),
       });
+      // A slow answer gets its headers after 60 s, then a newline every 15 s, then the JSON body.
+      text = (await response.text()).trim();
     } catch (err) {
       if (err?.name === 'TimeoutError') {
         throw new LlmError(`No answer from the LLM gateway within ${Math.round(timeoutMs / 1000)} s.`);
       }
-      throw new LlmError(`Could not reach the LLM gateway: ${err?.message ?? err}`);
+      throw new LlmError(
+        response
+          ? `The connection to the LLM gateway closed before the answer arrived: ${err?.message ?? err}`
+          : `Could not reach the LLM gateway: ${err?.message ?? err}`,
+      );
     }
 
-    // A slow answer gets its headers early and newlines every 15 s before the JSON body.
-    const text = (await response.text()).trim();
     let data;
     try {
       data = text ? JSON.parse(text) : undefined;

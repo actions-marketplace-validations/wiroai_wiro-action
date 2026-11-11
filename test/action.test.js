@@ -35,9 +35,9 @@ function parseOutputs(text) {
 
 /**
  * @param {Record<string, string>} inputs
- * @param {{ onStdout?: (text: string, child: import('node:child_process').ChildProcess) => void }} [options]
+ * @param {{ onStdout?: (text: string, child: import('node:child_process').ChildProcess) => void, killAfterMs?: number }} [options]
  */
-async function runAction(inputs, { onStdout } = {}) {
+async function runAction(inputs, { onStdout, killAfterMs } = {}) {
   const workspace = await mkdtemp(path.join(tmpdir(), 'wiro-action-'));
   await writeFile(path.join(workspace, 'notes.md'), 'Release notes: faster uploads.');
   await writeFile(path.join(workspace, 'logo.png'), PNG);
@@ -65,6 +65,7 @@ async function runAction(inputs, { onStdout } = {}) {
     onStdout?.(stdout, child);
   });
   child.stderr.on('data', (chunk) => (stdout += chunk));
+  if (killAfterMs) setTimeout(() => child.kill('SIGTERM'), killAfterMs);
   const code = await new Promise((resolve) => child.on('close', resolve));
   return {
     code,
@@ -151,5 +152,32 @@ describe('dist/index.js', () => {
     assert.equal(code, 1, stdout);
     assert.match(stdout, /Received SIGTERM, stopping task \d+/);
     assert.equal(mock.state.kills.length, kills + 1);
+  });
+
+  it('stops the task when the run is cancelled while the Run request is open', async () => {
+    const stops = mock.state.kills.length + mock.state.cancels.length;
+    const { code, stdout } = await runAction({ model: 'mock/slowstart', prompt: 'x' }, { killAfterMs: 400 });
+    assert.equal(code, 1, stdout);
+    assert.match(stdout, /Received SIGTERM while the run was starting/);
+    assert.match(stdout, /Stopped task \d+ with Task\/Cancel\./);
+    assert.equal(mock.state.kills.length + mock.state.cancels.length, stops + 1);
+  });
+
+  it('prints answers with workflow commands turned off', async () => {
+    const { code, stdout, outputs } = await runAction({
+      mode: 'llm',
+      model: 'mock/chat',
+      prompt: 'Hi\n::warning::not a real warning',
+    });
+    assert.equal(code, 0, stdout);
+    assert.equal(outputs.text, 'Echo: Hi\n::warning::not a real warning');
+    assert.match(stdout, /::stop-commands::([0-9a-f-]{36})\nEcho: Hi\n::warning::not a real warning\n::\1::/);
+  });
+
+  it('explains an empty api-key', async () => {
+    const { code, stdout } = await runAction({ 'api-key': '', model: 'mock/image', prompt: 'x' });
+    assert.equal(code, 1);
+    assert.match(stdout, /::error::`api-key` is empty\. Pass it from a secret/);
+    assert.match(stdout, /from forks, or by Dependabot, don't receive repository secrets/);
   });
 });

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import * as core from '@actions/core';
 import { InputError } from './errors.js';
@@ -39,25 +40,49 @@ async function writeSummary(markdown) {
 }
 
 /**
- * Stops the running task when the workflow run is cancelled, so it is not billed.
+ * Prints text from a model inside a log group with workflow commands turned off, so a
+ * line such as `::error::` in the text stays plain text.
+ * @param {string} title
+ * @param {string} text
+ */
+function printUntrusted(title, text) {
+  const token = randomUUID();
+  core.startGroup(title);
+  core.info(`::stop-commands::${token}`);
+  core.info(text);
+  core.info(`::${token}::`);
+  core.endGroup();
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Stops the task when the workflow run is cancelled, so it is not billed. A cancel that
+ * comes while the Run request is still open waits for the task to exist. The runner
+ * allows about 10 seconds after SIGINT before it kills the process.
  * @param {import('./wiro.js').RunApi} api
  * @param {() => import('./model.js').TaskHandle | undefined} getHandle
+ * @param {() => Promise<import('./model.js').TaskHandle> | undefined} getPending
  */
-function stopTaskOnCancel(api, getHandle) {
+function stopTaskOnCancel(api, getHandle, getPending) {
   let stopping = false;
   /** @param {NodeJS.Signals} signal */
   const onSignal = (signal) => {
     if (stopping) return;
     stopping = true;
     const exit = () => process.exit(1);
-    const handle = getHandle();
-    if (!handle || (handle.status && TERMINAL_STATUSES.has(handle.status))) {
-      exit();
-      return;
-    }
-    core.warning(`Received ${signal}, stopping task ${handle.taskId}.`);
-    setTimeout(exit, 5_000).unref();
-    stopTask(api, handle, log).finally(exit);
+    setTimeout(exit, 9_000).unref();
+    (async () => {
+      let handle = getHandle();
+      const pending = getPending();
+      if (!handle && pending) {
+        core.warning(`Received ${signal} while the run was starting, waiting for its task to stop it.`);
+        handle = await Promise.race([pending.catch(() => undefined), sleep(6_000).then(() => undefined)]);
+      }
+      if (!handle || (handle.status && TERMINAL_STATUSES.has(handle.status))) return;
+      core.warning(`Received ${signal}, stopping task ${handle.taskId}.`);
+      await stopTask(api, handle, log, { timeoutMs: 2_500 });
+    })().finally(exit);
   };
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
@@ -101,7 +126,15 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
   const api = createRunApi({ apiUrl, apiKey, apiSecret });
   /** @type {import('./model.js').TaskHandle | undefined} */
   let handle;
-  const unwatch = cancelOnTimeout ? stopTaskOnCancel(api, () => handle) : () => {};
+  /** @type {Promise<import('./model.js').TaskHandle> | undefined} */
+  let pending;
+  const unwatch = cancelOnTimeout
+    ? stopTaskOnCancel(
+        api,
+        () => handle,
+        () => pending,
+      )
+    : () => {};
   let result;
   try {
     result = await runModel({
@@ -113,6 +146,9 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
       pollMs,
       cancelOnTimeout,
       log,
+      onSubmit: (submitting) => {
+        pending = submitting;
+      },
       onTask: (started) => {
         handle = started;
         core.setSecret(started.token);
@@ -139,11 +175,7 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
   core.info(`Task ${result.handle.taskId} succeeded. Cost: $${result.cost || '0'}.`);
   for (const url of result.urls) core.info(`Output: ${url}`);
   for (const file of saved) core.info(`Saved: ${file}`);
-  if (result.text) {
-    core.startGroup('Text');
-    core.info(result.text);
-    core.endGroup();
-  }
+  if (result.text) printUntrusted('Text', result.text);
 
   if (summary) {
     await writeSummary(
@@ -178,7 +210,7 @@ async function llmMode({ apiKey, apiSecret, workspace }) {
 
   const body = await buildChatRequest({ model: model.id, prompt, system, extra, files, workspace });
   if (files.length) {
-    core.info(`Attached ${files.length} file(s): ${files.map((file) => displayPath(file, workspace)).join(', ')}`);
+    printUntrusted(`Attached ${files.length} file(s)`, files.map((file) => displayPath(file, workspace)).join('\n'));
   }
   const result = await runChat({ llmUrl, apiKey, apiSecret, body, timeoutMs, log });
 
@@ -187,11 +219,7 @@ async function llmMode({ apiKey, apiSecret, workspace }) {
   core.setOutput('response', JSON.stringify(result.response));
 
   core.info(`${model.id} answered. Cost: $${result.cost || '0'}.`);
-  if (result.text) {
-    core.startGroup('Answer');
-    core.info(result.text);
-    core.endGroup();
-  }
+  if (result.text) printUntrusted('Answer', result.text);
   if (summary) {
     await writeSummary(
       llmSummary({
@@ -207,7 +235,13 @@ async function llmMode({ apiKey, apiSecret, workspace }) {
 
 export async function run() {
   try {
-    const apiKey = core.getInput('api-key', { required: true });
+    const apiKey = core.getInput('api-key');
+    if (!apiKey) {
+      throw new InputError(
+        '`api-key` is empty. Pass it from a secret, for example `api-key: ${{ secrets.WIRO_API_KEY }}`. ' +
+          "Workflows started by pull requests from forks, or by Dependabot, don't receive repository secrets.",
+      );
+    }
     core.setSecret(apiKey);
     const apiSecret = core.getInput('api-secret');
     if (apiSecret) core.setSecret(apiSecret);

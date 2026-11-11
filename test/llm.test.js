@@ -158,6 +158,14 @@ describe('runChat', () => {
     await assert.rejects(chat('mock/filtered'), /content filter/);
   });
 
+  it('times out with a clear message while the body is still coming', async () => {
+    await assert.rejects(chat('mock/slowbody', { timeoutMs: 1_000 }), (err) => {
+      assert.ok(err instanceof LlmError);
+      assert.equal(err.message, 'No answer from the LLM gateway within 1 s.');
+      return true;
+    });
+  });
+
   it('explains unknown models and rejected keys', async () => {
     await assert.rejects(chat('mock/nothing'), /Model 'mock\/nothing' was not found \(model_not_found\)/);
     await assert.rejects(

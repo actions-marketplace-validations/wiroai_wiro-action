@@ -167,6 +167,10 @@ const RUN_MODELS = {
       },
     ],
   }),
+  // Task/Detail never finds this task.
+  'mock/lost': () => ({ lostDetail: true, steps: [{ status: 'task_start' }] }),
+  // Run answers after a delay, as it does while it stores uploaded files.
+  'mock/slowstart': () => ({ runDelayMs: 1_500, steps: [{ status: 'task_start' }] }),
 };
 
 /** Tool/Detail parameter lists. */
@@ -174,6 +178,7 @@ const TOOL_PARAMETERS = {
   'mock/upload': [
     { id: 'inputImage', type: 'fileinput' },
     { id: 'inputDocumentMultiple', type: 'multifileinput' },
+    { id: 'inputImageMultiple', type: 'multifileinputdrop' },
     { id: 'inputImageClothes', type: 'combinefileinput' },
     { id: 'prompt', type: 'textarea' },
     { id: 'scale', type: 'number' },
@@ -304,6 +309,7 @@ export async function startMockServer({ port = 0, host = '127.0.0.1' } = {}) {
             json(200, refusal);
             return;
           }
+          if (scenario.runDelayMs) await new Promise((resolve) => setTimeout(resolve, scenario.runDelayMs));
           const id = String(nextTask++);
           const token = `token-${id}`;
           state.tasks.set(token, { id, model, polls: 0, scenario, stopped: false });
@@ -320,6 +326,10 @@ export async function startMockServer({ port = 0, host = '127.0.0.1' } = {}) {
             return;
           }
           task.polls += 1;
+          if (task.scenario.lostDetail && !task.stopped) {
+            json(200, { result: false, errors: [{ code: 0, message: 'task-not-founded' }] });
+            return;
+          }
           if (task.scenario.flakyDetail && task.polls <= task.scenario.flakyDetail) {
             res.writeHead(502, { 'content-type': 'text/html' });
             res.end('<html>Bad gateway</html>');
@@ -453,6 +463,12 @@ export async function startMockServer({ port = 0, host = '127.0.0.1' } = {}) {
             return;
           case 'mock/length':
             completion('A long answer that got', 'length');
+            return;
+          case 'mock/slowbody':
+            // Headers and a keep-alive newline now, the body only after the client gave up.
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.write('\n');
+            setTimeout(() => res.end('{}'), 2_500);
             return;
           case 'mock/filtered':
             completion('', 'content_filter');

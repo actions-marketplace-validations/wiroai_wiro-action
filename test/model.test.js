@@ -44,6 +44,7 @@ function run(id, options = {}) {
     cancelOnTimeout: options.cancelOnTimeout ?? true,
     log,
     onTask: options.onTask,
+    refusalLimitMs: options.refusalLimitMs,
   });
 }
 
@@ -126,6 +127,16 @@ describe('runModel', () => {
     assert.equal(mock.state.kills.length + mock.state.cancels.length, stops);
   });
 
+  it('stops the task when status checks keep being refused', async () => {
+    const stops = mock.state.kills.length + mock.state.cancels.length;
+    await assert.rejects(run('mock/lost', { refusalLimitMs: 100, pollMs: 20 }), (err) => {
+      assert.ok(err instanceof TaskError);
+      assert.match(err.message, /^Stopped waiting for task \d+: task-not-founded The task was stopped\.$/);
+      return true;
+    });
+    assert.equal(mock.state.kills.length + mock.state.cancels.length, stops + 1);
+  });
+
   it('signs requests for signature projects', async () => {
     const api = createRunApi({ apiUrl: mock.apiUrl, apiKey: API_KEY, apiSecret: API_SECRET });
     const result = await run('mock/image', { api });
@@ -200,7 +211,8 @@ describe('file uploads', () => {
   it('names the URL field of each file parameter', () => {
     assert.equal(urlFieldFor('inputImage', 'fileinput'), 'inputImageUrl');
     assert.equal(urlFieldFor('inputDocumentMultiple', 'multifileinput'), 'inputDocumentUrlMultiple');
-    assert.equal(urlFieldFor('inputImages', 'multifileinput'), 'inputImagesUrl');
+    assert.equal(urlFieldFor('inputImages', 'multifileinput'), 'inputImagesUrlMultiple');
+    assert.equal(urlFieldFor('inputImageMultiple', 'multifileinputdrop'), 'inputImageUrlMultiple');
     assert.equal(urlFieldFor('inputImageClothes', 'combinefileinput'), undefined);
   });
 
@@ -210,6 +222,7 @@ describe('file uploads', () => {
       files: {
         inputImage: [path.join(dir, 'photo.png')],
         inputDocumentMultiple: [path.join(dir, 'a.pdf'), path.join(dir, 'b.pdf')],
+        inputImageMultiple: [path.join(dir, 'photo.png'), path.join(dir, 'shirt.jpg')],
         inputImageClothes: [path.join(dir, 'shirt.jpg')],
       },
     });
@@ -229,6 +242,9 @@ describe('file uploads', () => {
       'inputDocumentMultiple=@a.pdf (application/pdf)',
       'inputDocumentMultiple=@b.pdf (application/pdf)',
       'inputDocumentUrlMultiple=',
+      'inputImageMultiple=@photo.png (image/png)',
+      'inputImageMultiple=@shirt.jpg (image/jpeg)',
+      'inputImageUrlMultiple=',
       'inputImageClothes=@shirt.jpg (image/jpeg)',
       'inputImageClothes=https://example.com/pants.jpg',
     ]);
@@ -242,7 +258,7 @@ describe('file uploads', () => {
       assert.ok(err instanceof InputError);
       assert.match(
         err.message,
-        /no parameter named `image`\. Its file parameters are `inputImage`, `inputDocumentMultiple`, `inputImageClothes`\./,
+        /no parameter named `image`\. Its file parameters are `inputImage`, `inputDocumentMultiple`, `inputImageMultiple`, `inputImageClothes`\./,
       );
       return true;
     });

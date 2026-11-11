@@ -9,7 +9,13 @@ export const TERMINAL_STATUSES = new Set(['task_postprocess_end', 'task_cancel']
 /** Statuses before a GPU is assigned, when Task/Cancel applies instead of Task/Kill. */
 const QUEUED_STATUSES = new Set(['task_queue', 'task_accept', 'task_preprocess_start', 'task_preprocess_end']);
 
-const FILE_TYPES = new Set(['fileinput', 'multifileinput', 'combinefileinput']);
+const FILE_TYPES = new Set(['fileinput', 'multifileinput', 'multifileinputdrop', 'combinefileinput']);
+
+/** File types that take one file. */
+const SINGLE_FILE_TYPES = new Set(['fileinput']);
+
+/** How long Task/Detail may keep refusing (result: false) before the action gives up. */
+export const REFUSAL_LIMIT_MS = 120_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -27,9 +33,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export function urlFieldFor(id, type) {
   if (type === 'fileinput') return `${id}Url`;
-  if (type === 'multifileinput') {
-    return id.endsWith('Multiple') ? `${id.slice(0, -'Multiple'.length)}UrlMultiple` : `${id}Url`;
-  }
+  if (type === 'multifileinput' || type === 'multifileinputdrop') return `${id.replace('Multiple', '')}UrlMultiple`;
   return undefined;
 }
 
@@ -92,7 +96,7 @@ export async function buildMultipart({ params, files, types, model }) {
     if (type && !FILE_TYPES.has(type)) {
       throw new InputError(`\`${id}\` is a ${type} parameter of ${model.id}, not a file parameter.`);
     }
-    if (type === 'fileinput' && paths.length > 1) {
+    if (SINGLE_FILE_TYPES.has(type) && paths.length > 1) {
       throw new InputError(`\`${id}\` takes one file, but ${paths.length} match.`);
     }
 
@@ -173,10 +177,11 @@ export async function submitRun(api, model, body, deadline, log, firstWaitMs = 5
  * @param {import('./wiro.js').RunApi} api
  * @param {TaskHandle} handle
  * @param {Logger} log
+ * @param {{ timeoutMs?: number }} [options] time allowed for each call
  */
-export async function stopTask(api, handle, log) {
-  const cancel = ['Task/Cancel', () => api.cancel(handle.taskId)];
-  const kill = ['Task/Kill', () => api.kill(handle.token)];
+export async function stopTask(api, handle, log, { timeoutMs = 15_000 } = {}) {
+  const cancel = ['Task/Cancel', () => api.cancel(handle.taskId, timeoutMs)];
+  const kill = ['Task/Kill', () => api.kill(handle.token, timeoutMs)];
   const queued = !handle.status || QUEUED_STATUSES.has(handle.status);
   for (const [name, attempt] of queued ? [cancel, kill] : [kill, cancel]) {
     try {
@@ -194,22 +199,37 @@ export async function stopTask(api, handle, log) {
  * Polls Task/Detail until the task ends (https://wiro.ai/docs/tasks), or the deadline passes.
  * @param {import('./wiro.js').RunApi} api
  * @param {TaskHandle} handle
- * @param {{ deadline: number, pollMs: number, timeoutMs: number, cancelOnTimeout: boolean, log: Logger }} options
+ * @param {{ deadline: number, pollMs: number, timeoutMs: number, cancelOnTimeout: boolean, log: Logger, refusalLimitMs?: number }} options
  */
-export async function waitForTask(api, handle, { deadline, pollMs, timeoutMs, cancelOnTimeout, log }) {
+export async function waitForTask(
+  api,
+  handle,
+  { deadline, pollMs, timeoutMs, cancelOnTimeout, log, refusalLimitMs = REFUSAL_LIMIT_MS },
+) {
+  /** Ends the wait early, stopping the task first when that is allowed. */
+  const giveUp = async (reason) => {
+    let message = `Stopped waiting for task ${handle.taskId}: ${reason}`;
+    if (cancelOnTimeout) {
+      const stopped = await stopTask(api, handle, log);
+      message += stopped ? ' The task was stopped.' : ' The task could not be stopped, so it may still finish.';
+    }
+    return new TaskError(message);
+  };
+
   let failures = 0;
-  let refusals = 0;
+  let refusingSince;
   for (;;) {
     let detail;
     try {
-      detail = await api.taskDetail(handle.token);
+      detail = await api.taskDetail(handle.token, Math.max(5_000, Math.min(60_000, deadline - Date.now())));
       failures = 0;
-      refusals = 0;
+      refusingSince = undefined;
     } catch (err) {
+      // With the key refused, Task/Cancel and Task/Kill would be refused too.
       if (err instanceof WiroApiError && (err.status === 401 || err.status === 403)) throw err;
       if (err instanceof WiroApiError && !err.retryable) {
-        refusals += 1;
-        if (refusals >= 5) throw err;
+        refusingSince ??= Date.now();
+        if (Date.now() - refusingSince >= refusalLimitMs) throw await giveUp(err.message);
       } else {
         failures += 1;
       }
@@ -354,9 +374,23 @@ export function assertSucceeded(task, handle) {
  * @param {number} options.pollMs
  * @param {boolean} options.cancelOnTimeout
  * @param {Logger} options.log
- * @param {(handle: TaskHandle) => void} [options.onTask]
+ * @param {(handle: TaskHandle) => void} [options.onTask] called once the task exists
+ * @param {(pending: Promise<TaskHandle>) => void} [options.onSubmit] called while the Run request is open
+ * @param {number} [options.refusalLimitMs]
  */
-export async function runModel({ api, model, params, files, timeoutMs, pollMs, cancelOnTimeout, log, onTask }) {
+export async function runModel({
+  api,
+  model,
+  params,
+  files,
+  timeoutMs,
+  pollMs,
+  cancelOnTimeout,
+  log,
+  onTask,
+  onSubmit,
+  refusalLimitMs,
+}) {
   const deadline = Date.now() + timeoutMs;
 
   /** @type {object | FormData} */
@@ -366,11 +400,13 @@ export async function runModel({ api, model, params, files, timeoutMs, pollMs, c
     body = await buildMultipart({ params, files, types, model });
   }
 
-  const handle = await submitRun(api, model, body, deadline, log);
+  const submitting = submitRun(api, model, body, deadline, log);
+  onSubmit?.(submitting);
+  const handle = await submitting;
   onTask?.(handle);
   log.info(`Started task ${handle.taskId} on ${model.id}.`);
 
-  const task = await waitForTask(api, handle, { deadline, pollMs, timeoutMs, cancelOnTimeout, log });
+  const task = await waitForTask(api, handle, { deadline, pollMs, timeoutMs, cancelOnTimeout, log, refusalLimitMs });
   assertSucceeded(task, handle);
 
   const outputs = normalizeOutputs(task);
