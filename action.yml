@@ -1,0 +1,93 @@
+name: Wiro AI Action
+description: Run any of 1,000+ Wiro AI models for image, video, audio and 3D, or ask an LLM, and use the results in your workflow.
+author: Wiro AI
+
+branding:
+  icon: zap
+  color: gray-dark
+
+inputs:
+  api-key:
+    description: Your Wiro AI project API key. Keep it in a secret.
+    required: true
+  api-secret:
+    description: The project's API secret, for projects that use signature authentication. Keep it in a secret.
+    required: false
+    default: ''
+  mode:
+    description: '`model` runs a model and waits for the task. `llm` sends one chat request to the Wiro AI LLM gateway.'
+    required: false
+    default: model
+  model:
+    description: 'The model ID, as `owner/model` from the model page on wiro.ai, for example `pruna/p-image` or `openai/gpt-5-4-mini`.'
+    required: true
+  prompt:
+    description: 'llm mode: the message to send (required). model mode: sent as the `prompt` parameter.'
+    required: false
+    default: ''
+  system:
+    description: 'llm mode: the system prompt.'
+    required: false
+    default: ''
+  params:
+    description: 'A JSON or YAML mapping. model mode: the model parameters. llm mode: extra Chat Completions fields such as `max_tokens` or `reasoning_effort`.'
+    required: false
+    default: ''
+  files:
+    description: 'model mode: a mapping of file parameter to local path, for example `inputImage: assets/photo.png`. llm mode: paths or glob patterns, one per line, to attach to the prompt (text files, PNG, JPEG, GIF, WebP and PDF).'
+    required: false
+    default: ''
+  timeout:
+    description: Seconds to wait for the result.
+    required: false
+    default: '600'
+  poll-interval:
+    description: 'model mode: seconds between task status checks.'
+    required: false
+    default: '3'
+  cancel-on-timeout:
+    description: 'model mode: stop the task when `timeout` runs out or the workflow run is cancelled.'
+    required: false
+    default: 'true'
+  download:
+    description: 'model mode: download the output files into `download-dir`.'
+    required: false
+    default: 'false'
+  download-dir:
+    description: 'model mode: the folder for downloaded files, relative to the workspace.'
+    required: false
+    default: wiro-output
+  summary:
+    description: Write the result to the job summary.
+    required: false
+    default: 'true'
+  api-url:
+    description: The Wiro AI API base URL.
+    required: false
+    default: https://api.wiro.ai/v1
+  llm-url:
+    description: The Wiro AI LLM gateway base URL.
+    required: false
+    default: https://llm.wiro.ai/v1
+
+outputs:
+  task-id:
+    description: 'model mode: the Wiro AI task ID.'
+  url:
+    description: 'model mode: the URL of the first output file.'
+  urls:
+    description: 'model mode: a JSON array with the URLs of all output files.'
+  files:
+    description: 'model mode: a JSON array with the downloaded file paths, relative to the workspace.'
+  outputs:
+    description: "model mode: the task's outputs as a JSON array of objects with `name`, `contenttype`, `size`, `url` and, for LLMs, `content`."
+  text:
+    description: 'The text answer: the reply in llm mode. In model mode, the answer of an LLM, or the text file a model returns, such as a transcript.'
+  cost:
+    description: The amount billed for the run, in USD.
+  response:
+    description: 'llm mode: the full Chat Completions response as JSON.'
+
+runs:
+  using: node24
+  main: dist/index.js

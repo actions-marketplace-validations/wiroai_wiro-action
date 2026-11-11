@@ -1,0 +1,9 @@
+node_modules/
+coverage/
+wiro-output/
+*.log
+.env
+.env.*
+.DS_Store
+.claude/
+.secrets/

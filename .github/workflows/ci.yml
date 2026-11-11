@@ -1,0 +1,226 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+  dist:
+    name: Check dist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Compare with the committed dist
+        run: |
+          if [ -n "$(git status --porcelain -- dist)" ]; then
+            git status --short -- dist
+            echo "::error::dist/ does not match the source. Run npm run build and commit dist/."
+            exit 1
+          fi
+
+  mock:
+    name: Run the action against a mock API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # The mock imports nothing outside Node.js, so it needs no npm install.
+      - name: Start the mock API
+        run: |
+          node test/mock-server.js --port 8787 > "$RUNNER_TEMP/mock.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:8787/; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/mock.log"
+          exit 1
+
+      - name: Run a model
+        id: model
+        uses: ./
+        with:
+          api-key: test-key
+          api-url: http://127.0.0.1:8787/v1
+          model: mock/image
+          prompt: A small paper boat on a calm lake
+          params: |
+            aspectRatio: "16:9"
+          download: true
+          poll-interval: 1
+
+      - name: Check the model outputs
+        env:
+          TASK_ID: ${{ steps.model.outputs.task-id }}
+          URLS: ${{ steps.model.outputs.urls }}
+          FILES: ${{ steps.model.outputs.files }}
+          COST: ${{ steps.model.outputs.cost }}
+        run: |
+          set -euo pipefail
+          test -n "$TASK_ID"
+          test "$(jq length <<< "$URLS")" = 2
+          test "$COST" = 0.005
+          mapfile -t files < <(jq -r '.[]' <<< "$FILES")
+          test "${#files[@]}" = 2
+          for file in "${files[@]}"; do test -s "$file"; done
+
+      - name: Ask an LLM
+        id: llm
+        uses: ./
+        with:
+          mode: llm
+          api-key: test-key
+          llm-url: http://127.0.0.1:8787/llm/v1
+          model: mock/chat
+          system: Be brief.
+          prompt: Summarize the README.
+          files: README.md
+
+      - name: Check the LLM outputs
+        env:
+          TEXT: ${{ steps.llm.outputs.text }}
+          COST: ${{ steps.llm.outputs.cost }}
+        run: |
+          set -euo pipefail
+          test "$TEXT" = 'Echo: 2 text'
+          test "$COST" = 0.0000123
+
+      - name: Fail on a failed run
+        id: failed
+        continue-on-error: true
+        uses: ./
+        with:
+          api-key: test-key
+          api-url: http://127.0.0.1:8787/v1
+          model: mock/fail
+          prompt: x
+          poll-interval: 1
+
+      - name: Check that the failed run failed the step
+        env:
+          OUTCOME: ${{ steps.failed.outcome }}
+        run: test "$OUTCOME" = failure
+
+  live:
+    name: Live smoke test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for the API key
+        id: key
+        env:
+          WIRO_API_KEY: ${{ secrets.WIRO_API_KEY }}
+        run: |
+          if [ -n "$WIRO_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::The WIRO_API_KEY secret is not set, so the live smoke test was skipped."
+          fi
+
+      - name: Checkout
+        if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Generate an image
+        id: image
+        if: steps.key.outputs.present == 'true'
+        uses: ./
+        with:
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          api-secret: ${{ secrets.WIRO_API_SECRET }}
+          model: pruna/p-image
+          prompt: A small paper boat on a calm lake at sunrise, soft light
+          params: |
+            aspectRatio: "1:1"
+          download: true
+          timeout: 300
+
+      - name: Ask an LLM
+        id: llm
+        if: steps.key.outputs.present == 'true'
+        uses: ./
+        with:
+          mode: llm
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          api-secret: ${{ secrets.WIRO_API_SECRET }}
+          model: openai/gpt-5-nano
+          prompt: Reply with the single word ready.
+          params: |
+            reasoning_effort: low
+          timeout: 120
+
+      - name: Check the outputs
+        if: steps.key.outputs.present == 'true'
+        env:
+          URL: ${{ steps.image.outputs.url }}
+          FILES: ${{ steps.image.outputs.files }}
+          TEXT: ${{ steps.llm.outputs.text }}
+          IMAGE_COST: ${{ steps.image.outputs.cost }}
+          LLM_COST: ${{ steps.llm.outputs.cost }}
+        run: |
+          set -euo pipefail
+          test -n "$URL"
+          test -s "$(jq -r '.[0]' <<< "$FILES")"
+          test -n "$TEXT"
+          echo "Image: \$$IMAGE_COST, LLM: \$$LLM_COST"
