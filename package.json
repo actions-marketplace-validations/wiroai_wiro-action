@@ -8,10 +8,10 @@
   "homepage": "https://wiro.ai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wiroai/wiro-action.git"
+    "url": "git+https://github.com/wiroai/Wiro-Action.git"
   },
   "bugs": {
-    "url": "https://github.com/wiroai/wiro-action/issues"
+    "url": "https://github.com/wiroai/Wiro-Action/issues"
   },
   "type": "module",
   "main": "dist/index.js",

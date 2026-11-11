@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/wiroai/wiro-action/main/.github/assets/wiro-logo.png" alt="Wiro AI" width="240">
+<img src="https://raw.githubusercontent.com/wiroai/Wiro-Action/main/.github/assets/wiro-logo.png" alt="Wiro AI" width="240">
 
 # Wiro AI Action
 
 Run Wiro AI models in GitHub Actions: generate images, video, audio and 3D with any of 1,000+ models, or ask an LLM about your code, and use the results in the next steps of your workflow.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/wiroai/wiro-action/ci.yml?branch=main&style=for-the-badge&label=CI&color=111111)](https://github.com/wiroai/wiro-action/actions/workflows/ci.yml) [![Node.js 24](https://img.shields.io/badge/Node.js-24-111111?style=for-the-badge)](./action.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=for-the-badge)](./LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/wiroai/Wiro-Action/ci.yml?branch=main&style=for-the-badge&label=CI&color=111111)](https://github.com/wiroai/Wiro-Action/actions/workflows/ci.yml) [![Node.js 24](https://img.shields.io/badge/Node.js-24-111111?style=for-the-badge)](./action.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=for-the-badge)](./LICENSE)
 
 [Website](https://wiro.ai) · [Models](https://wiro.ai/models) · [Docs](https://wiro.ai/docs) · [Dashboard](https://wiro.ai/panel)
 
@@ -14,7 +14,7 @@ Run Wiro AI models in GitHub Actions: generate images, video, audio and 3D with 
 
 </div>
 
-`wiroai/wiro-action` calls the [Wiro AI](https://wiro.ai) API from a workflow step. It has two modes:
+`wiroai/Wiro-Action` calls the [Wiro AI](https://wiro.ai) API from a workflow step. It has two modes:
 
 - **model** runs any model in the catalog, waits for the task to finish and gives you the output URLs, the text and the cost. It can also download the output files into the workspace.
 - **llm** sends a prompt, with files if you like, to the Wiro AI LLM gateway and gives you the answer. The gateway speaks the OpenAI Chat Completions protocol.
@@ -26,7 +26,7 @@ Run Wiro AI models in GitHub Actions: generate images, video, audio and 3D with 
 3. Add a step to a workflow:
 
 ```yaml
-- uses: wiroai/wiro-action@v1
+- uses: wiroai/Wiro-Action@v1
   id: image
   with:
     api-key: ${{ secrets.WIRO_API_KEY }}
@@ -52,7 +52,7 @@ LLMs run in model mode too, and their answer is in the `text` output. So is the 
 Models that take images, audio, video or documents accept a public URL in `params`, or a file from the workspace through `files`. `files` maps each file parameter to a path:
 
 ```yaml
-- uses: wiroai/wiro-action@v1
+- uses: wiroai/Wiro-Action@v1
   with:
     api-key: ${{ secrets.WIRO_API_KEY }}
     model: wiro/remove-background
@@ -74,7 +74,7 @@ Set `mode: llm` and pick a model from the [LLM catalog](https://wiro.ai/models?c
 for models that read images and documents. `params` adds Chat Completions fields such as `max_tokens`, `reasoning_effort` or `response_format`.
 
 ```yaml
-- uses: wiroai/wiro-action@v1
+- uses: wiroai/Wiro-Action@v1
   id: review
   with:
     mode: llm
@@ -103,7 +103,7 @@ jobs:
   banner:
     runs-on: ubuntu-latest
     steps:
-      - uses: wiroai/wiro-action@v1
+      - uses: wiroai/Wiro-Action@v1
         id: banner
         with:
           api-key: ${{ secrets.WIRO_API_KEY }}
@@ -160,7 +160,7 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - uses: wiroai/wiro-action@v1
+      - uses: wiroai/Wiro-Action@v1
         id: alt
         if: steps.changed.outputs.images != ''
         with:
@@ -211,7 +211,7 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: git diff "$BASE" HEAD -- . ':!package-lock.json' > pr.diff
 
-      - uses: wiroai/wiro-action@v1
+      - uses: wiroai/Wiro-Action@v1
         id: summary
         with:
           mode: llm
@@ -320,7 +320,7 @@ To release, update the version in `package.json` and `src/version.js`, tag the c
 | [n8n-nodes-wiroai](https://github.com/wiroai/n8n-nodes-wiroai)               | Wiro AI nodes for n8n, [`@wiro-ai/n8n-nodes-wiroai` on npm](https://www.npmjs.com/package/@wiro-ai/n8n-nodes-wiroai)                   |
 | [Wiro-Dify-Plugin](https://github.com/wiroai/Wiro-Dify-Plugin) | Wiro AI plugins for Dify: the LLM gateway as a model provider, plus image, video, speech and music tools |
 | [Wiro-ComfyUI](https://github.com/wiroai/Wiro-ComfyUI) | Wiro AI nodes for ComfyUI |
-| [hermes-wiro-provider](https://github.com/wiroai/hermes-wiro-provider) | Wiro AI model provider plugin for Hermes Agent |
+| [Wiro-Hermes](https://github.com/wiroai/Wiro-Hermes) | Wiro AI model provider plugin for Hermes Agent |
 | [Wiro-Zed](https://github.com/wiroai/Wiro-Zed) | Wiro AI MCP server extension for Zed |
 | [Wiro-Docs](https://github.com/wiroai/Wiro-Docs)                             | Source of the Wiro AI API docs                                                                                                         |
 
