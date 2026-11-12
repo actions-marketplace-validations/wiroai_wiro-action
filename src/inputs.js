@@ -3,7 +3,8 @@ import { InputError } from './errors.js';
 
 /** Defaults, kept equal to action.yml by a test. */
 export const DEFAULTS = Object.freeze({
-  mode: 'model',
+  // Empty: `workflow` when the workflow input is set, else `model`.
+  mode: '',
   timeout: 600,
   'poll-interval': 3,
   'cancel-on-timeout': true,
@@ -31,15 +32,38 @@ export function parseModel(value, mode) {
   return { id, owner, project };
 }
 
-/** @param {string} value */
-export function parseMode(value) {
-  const mode = String(value || DEFAULTS.mode)
+const MODES = ['model', 'llm', 'workflow'];
+
+/**
+ * @param {string} value
+ * @param {{ workflow?: string }} [others] other inputs that decide an empty mode
+ * @returns {'model' | 'llm' | 'workflow'}
+ */
+export function parseMode(value, { workflow = '' } = {}) {
+  const mode = String(value ?? '')
     .trim()
     .toLowerCase();
-  if (mode !== 'model' && mode !== 'llm') {
-    throw new InputError(`\`mode\` must be \`model\` or \`llm\`, not \`${value}\`.`);
+  if (!mode) return String(workflow).trim() ? 'workflow' : 'model';
+  if (!MODES.includes(mode)) {
+    throw new InputError(`\`mode\` must be \`model\`, \`llm\` or \`workflow\`, not \`${value}\`.`);
   }
-  return mode;
+  return /** @type {'model' | 'llm' | 'workflow'} */ (mode);
+}
+
+/**
+ * The `max-cost` limit in USD, or undefined when it is not set.
+ * @param {string} value
+ */
+export function parseMaxCost(value) {
+  const text = String(value ?? '')
+    .trim()
+    .replace(/^\$/, '');
+  if (!text) return undefined;
+  const amount = Number(text);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new InputError(`\`max-cost\` must be an amount in USD, such as \`0.50\`, not \`${value}\`.`);
+  }
+  return amount;
 }
 
 /**

@@ -2,6 +2,7 @@ import { openAsBlob } from 'node:fs';
 import path from 'node:path';
 import { InputError, TaskError, WiroApiError } from './errors.js';
 import { fetchText, isTextOutput, MAX_TEXT_OUTPUT_BYTES, mimeType } from './files.js';
+import { startingValue } from './pricing.js';
 
 /** Statuses that end a task. Everything else, `task_error` included, means keep waiting. */
 export const TERMINAL_STATUSES = new Set(['task_postprocess_end', 'task_cancel']);
@@ -45,6 +46,68 @@ function formValue(value) {
 }
 
 /**
+ * Reads a model's Tool/Detail entry: its parameters, categories and price list. Returns
+ * null when it can't be read.
+ * @param {import('./wiro.js').RunApi} api
+ * @param {ModelId} model
+ * @param {Logger} log
+ * @param {string} [consequence] what happens without it, for the warning
+ */
+export async function readTool(api, model, log, consequence = '') {
+  try {
+    const detail = await api.toolDetail(model.owner, model.project);
+    const tool = Array.isArray(detail?.tool) ? detail.tool[0] : undefined;
+    if (tool) return tool;
+    log.warning(`Could not read the parameters of ${model.id}.${consequence ? ` ${consequence}` : ''}`);
+  } catch (err) {
+    log.warning(
+      `Could not read the parameters of ${model.id} (${err.message}).${consequence ? ` ${consequence}` : ''}`,
+    );
+  }
+  return null;
+}
+
+/**
+ * The type of each parameter in a Tool/Detail entry.
+ * @param {any} tool
+ * @returns {Map<string, string>}
+ */
+export function parameterTypes(tool) {
+  const types = new Map();
+  for (const group of Array.isArray(tool?.parameters) ? tool.parameters : []) {
+    for (const item of Array.isArray(group?.items) ? group.items : []) {
+      if (item?.id) types.set(String(item.id), String(item.type ?? ''));
+    }
+  }
+  return types;
+}
+
+/**
+ * The defaults of required parameters the caller left out, such as an output format. The
+ * Run API asks for every required parameter, and these are the values the model's form on
+ * wiro.ai starts with. File parameters, `input*` parameters and the prompt are never filled.
+ * @param {any} tool
+ * @param {Record<string, unknown>} params
+ * @param {Record<string, string[]>} files
+ * @returns {Record<string, unknown>}
+ */
+export function requiredDefaults(tool, params, files) {
+  /** @type {Record<string, unknown>} */
+  const filled = {};
+  for (const group of Array.isArray(tool?.parameters) ? tool.parameters : []) {
+    for (const item of Array.isArray(group?.items) ? group.items : []) {
+      if (item?.required !== true || !item.id) continue;
+      const id = String(item.id);
+      if (id in params || id in files || id === 'prompt' || id.includes('input') || FILE_TYPES.has(item.type)) continue;
+      const fallback = startingValue(item);
+      if (fallback === undefined || fallback === null || fallback === '') continue;
+      filled[id] = fallback;
+    }
+  }
+  return filled;
+}
+
+/**
  * Reads the model's parameter types from Tool/Detail. Returns null when they can't be read.
  * @param {import('./wiro.js').RunApi} api
  * @param {ModelId} model
@@ -52,21 +115,8 @@ function formValue(value) {
  * @returns {Promise<Map<string, string> | null>}
  */
 export async function readParameterTypes(api, model, log) {
-  try {
-    const detail = await api.toolDetail(model.owner, model.project);
-    const tool = Array.isArray(detail?.tool) ? detail.tool[0] : undefined;
-    if (!tool) return null;
-    const types = new Map();
-    for (const group of Array.isArray(tool.parameters) ? tool.parameters : []) {
-      for (const item of Array.isArray(group?.items) ? group.items : []) {
-        if (item?.id) types.set(String(item.id), String(item.type ?? ''));
-      }
-    }
-    return types;
-  } catch (err) {
-    log.warning(`Could not read the parameters of ${model.id} (${err.message}). Files are sent as given.`);
-    return null;
-  }
+  const tool = await readTool(api, model, log, 'Files are sent as given.');
+  return tool ? parameterTypes(tool) : null;
 }
 
 /**
@@ -140,8 +190,35 @@ function explainRunError(err, model) {
 }
 
 /**
- * Starts the run. A concurrency refusal (code 96) creates no task, so it is tried again
- * with growing waits until the deadline.
+ * Calls `start` until it is not refused for the concurrency limit (code 96), which creates
+ * nothing, waiting longer each time, until the deadline.
+ * @template T
+ * @param {(timeoutMs: number) => Promise<T>} start
+ * @param {number} deadline
+ * @param {Logger} log
+ * @param {number} [firstWaitMs]
+ * @returns {Promise<T>}
+ */
+export async function withConcurrencyRetry(start, deadline, log, firstWaitMs = 5_000) {
+  let wait = firstWaitMs;
+  for (;;) {
+    try {
+      const remaining = deadline - Date.now();
+      return await start(Math.max(30_000, Math.min(remaining, 300_000)));
+    } catch (err) {
+      if (err instanceof WiroApiError && err.code === 96 && Date.now() + wait < deadline) {
+        log.info(`${err.message} Trying again in ${Math.round(wait / 1000)} s.`);
+        await sleep(wait);
+        wait = Math.min(wait * 2, 60_000);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+/**
+ * Starts the run, trying again after concurrency refusals.
  * @param {import('./wiro.js').RunApi} api
  * @param {ModelId} model
  * @param {object | FormData} body
@@ -150,24 +227,19 @@ function explainRunError(err, model) {
  * @param {number} [firstWaitMs]
  */
 export async function submitRun(api, model, body, deadline, log, firstWaitMs = 5_000) {
-  let wait = firstWaitMs;
-  for (;;) {
-    try {
-      const remaining = deadline - Date.now();
-      const data = await api.run(model.owner, model.project, body, Math.max(30_000, Math.min(remaining, 300_000)));
-      if (!data?.taskid || !data?.socketaccesstoken) {
-        throw new WiroApiError('The Run API answered without a task ID.');
-      }
-      return { taskId: String(data.taskid), token: String(data.socketaccesstoken) };
-    } catch (err) {
-      if (err instanceof WiroApiError && err.code === 96 && Date.now() + wait < deadline) {
-        log.info(`${err.message} Trying again in ${Math.round(wait / 1000)} s.`);
-        await sleep(wait);
-        wait = Math.min(wait * 2, 60_000);
-        continue;
-      }
-      throw explainRunError(err, model);
+  try {
+    const data = await withConcurrencyRetry(
+      (timeoutMs) => api.run(model.owner, model.project, body, timeoutMs),
+      deadline,
+      log,
+      firstWaitMs,
+    );
+    if (!data?.taskid || !data?.socketaccesstoken) {
+      throw new WiroApiError('The Run API answered without a task ID.');
     }
+    return { taskId: String(data.taskid), token: String(data.socketaccesstoken) };
+  } catch (err) {
+    throw explainRunError(err, model);
   }
 }
 
@@ -297,27 +369,33 @@ export function extractText(task, outputs) {
   const raw = outputs.find(
     (output) => output.contenttype === 'raw' && output.content && typeof output.content === 'object',
   );
-  if (raw) {
-    const content = /** @type {any} */ (raw.content);
-    const segments = Array.isArray(content.segments) ? content.segments : [];
-    const answer = segments
-      .filter((segment) => segment?.type === 'answer' && typeof segment.text === 'string')
-      .map((segment) => segment.text)
-      .join('')
-      .trim();
-    if (answer) return answer;
-    if (Array.isArray(content.answer)) {
-      const joined = content.answer
-        .filter((part) => typeof part === 'string')
-        .join('')
-        .trim();
-      if (joined) return joined;
-    }
-    if (typeof content.raw === 'string' && content.raw.trim()) return content.raw.trim();
-    return debugOutput;
-  }
+  if (raw) return rawAnswer(raw.content) || debugOutput;
   if (outputs.some((output) => output.url)) return '';
   return debugOutput;
+}
+
+/**
+ * The answer in an LLM's structured output: its answer segments, else its answer list,
+ * else its merged text. Thinking is left out.
+ * @param {any} content an output's `content`
+ */
+export function rawAnswer(content) {
+  if (!content || typeof content !== 'object') return '';
+  const segments = Array.isArray(content.segments) ? content.segments : [];
+  const answer = segments
+    .filter((segment) => segment?.type === 'answer' && typeof segment.text === 'string')
+    .map((segment) => segment.text)
+    .join('')
+    .trim();
+  if (answer) return answer;
+  if (Array.isArray(content.answer)) {
+    const joined = content.answer
+      .filter((part) => typeof part === 'string')
+      .join('')
+      .trim();
+    if (joined) return joined;
+  }
+  return typeof content.raw === 'string' ? content.raw.trim() : '';
 }
 
 /** @param {any} task */
@@ -377,6 +455,7 @@ export function assertSucceeded(task, handle) {
  * @param {(handle: TaskHandle) => void} [options.onTask] called once the task exists
  * @param {(pending: Promise<TaskHandle>) => void} [options.onSubmit] called while the Run request is open
  * @param {number} [options.refusalLimitMs]
+ * @param {any} [options.tool] the model's Tool/Detail entry, when already read
  */
 export async function runModel({
   api,
@@ -390,13 +469,14 @@ export async function runModel({
   onTask,
   onSubmit,
   refusalLimitMs,
+  tool,
 }) {
   const deadline = Date.now() + timeoutMs;
 
   /** @type {object | FormData} */
   let body = params;
   if (Object.keys(files).length) {
-    const types = await readParameterTypes(api, model, log);
+    const types = tool ? parameterTypes(tool) : await readParameterTypes(api, model, log);
     body = await buildMultipart({ params, files, types, model });
   }
 

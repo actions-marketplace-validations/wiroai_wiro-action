@@ -11,6 +11,7 @@ import {
   parseFileMapping,
   parseList,
   parseMapping,
+  parseMaxCost,
   parseMode,
   parseModel,
   parseSeconds,
@@ -38,10 +39,28 @@ describe('parseModel', () => {
 });
 
 describe('parseMode', () => {
-  it('accepts model and llm, in any case', () => {
-    assert.equal(parseMode(''), 'model');
+  it('accepts the three modes, in any case', () => {
     assert.equal(parseMode('LLM'), 'llm');
-    assert.throws(() => parseMode('chat'), /`model` or `llm`/);
+    assert.equal(parseMode('workflow'), 'workflow');
+    assert.equal(parseMode(' model '), 'model');
+    assert.throws(() => parseMode('chat'), /`model`, `llm` or `workflow`, not `chat`/);
+  });
+
+  it('picks workflow mode when only a workflow is given', () => {
+    assert.equal(parseMode(''), 'model');
+    assert.equal(parseMode('', { workflow: 'product-ad-a1B2c' }), 'workflow');
+    assert.equal(parseMode('model', { workflow: 'product-ad-a1B2c' }), 'model');
+  });
+});
+
+describe('parseMaxCost', () => {
+  it('reads an amount in USD', () => {
+    assert.equal(parseMaxCost(''), undefined);
+    assert.equal(parseMaxCost('0.50'), 0.5);
+    assert.equal(parseMaxCost('$2'), 2);
+    assert.equal(parseMaxCost('0'), 0);
+    assert.throws(() => parseMaxCost('cheap'), /`max-cost` must be an amount in USD/);
+    assert.throws(() => parseMaxCost('-1'), /`max-cost` must be an amount in USD/);
   });
 });
 

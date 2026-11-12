@@ -180,4 +180,104 @@ describe('dist/index.js', () => {
     assert.match(stdout, /::error::`api-key` is empty\. Pass it from a secret/);
     assert.match(stdout, /from forks, or by Dependabot, don't receive repository secrets/);
   });
+
+  it('runs a workflow from its link, with a local file as an input', async () => {
+    const uploads = mock.state.uploads.length;
+    const { code, stdout, outputs, summary, workspace } = await runAction({
+      workflow: 'https://wiro.ai/workflows/promo-video-AbC12',
+      params: 'brief: A paper boat on a lake',
+      files: 'logo: logo.png',
+      download: 'true',
+      'max-cost': '0.20',
+    });
+    assert.equal(code, 0, stdout);
+    assert.match(stdout, /Workflow: Promo video \(promo-video-AbC12\)/);
+    assert.match(stdout, /Estimated cost: \$0\.13\./);
+    assert.match(stdout, /node-llm \(mock\/llm\): billed by tokens when the run ends/);
+    assert.match(stdout, /::warning::LLM token use is billed when the run ends/);
+    assert.equal(outputs['estimated-cost'], '0.13');
+    assert.match(outputs['run-token'], /^wfrun\d+$/);
+    assert.equal(outputs.cost, '0.13');
+    assert.equal(outputs.text, 'A short caption.');
+    assert.deepEqual(JSON.parse(outputs.urls), [`${mock.origin}/files/promo.mp4`]);
+    assert.deepEqual(JSON.parse(outputs.files), ['wiro-output/promo.mp4']);
+    assert.ok((await stat(path.join(workspace, 'wiro-output', 'promo.mp4'))).size > 0);
+    assert.deepEqual(Object.keys(JSON.parse(outputs.outputs)), ['video', 'caption']);
+    assert.equal(mock.state.uploads.length, uploads + 1);
+    assert.deepEqual(mock.state.workflowRunCalls.at(-1).input, {
+      brief: 'A paper boat on a lake',
+      logo: `${mock.origin}/files/up-logo.png`,
+    });
+    assert.match(summary, /### Wiro AI workflow: Promo video/);
+    assert.match(summary, /\| node-video \| mock\/video \| completed \| 2 s \|/);
+  });
+
+  it('does not start a run above max-cost', async () => {
+    const runs = mock.state.runs.length;
+    const { code, stdout, outputs } = await runAction({
+      model: 'mock/video',
+      prompt: 'A paper boat',
+      params: 'duration: 10',
+      'max-cost': '0.20',
+    });
+    assert.equal(code, 1);
+    assert.match(stdout, /::error::The run was not started: the estimated cost is \$0\.25, above max-cost \$0\.2\./);
+    assert.equal(outputs['estimated-cost'], '0.25');
+    assert.equal(mock.state.runs.length, runs);
+  });
+
+  it('does not start a run whose price it cannot confirm under max-cost', async () => {
+    const runs = mock.state.runs.length;
+    const { code, stdout } = await runAction({ model: 'mock/timed', 'max-cost': '1' });
+    assert.equal(code, 1);
+    assert.match(
+      stdout,
+      /can't be confirmed under max-cost \$1 before it runs\. mock\/timed: \$0\.001 per second of run time/,
+    );
+    assert.equal(mock.state.runs.length, runs);
+  });
+
+  it('sends the defaults of required parameters that were left out', async () => {
+    const { code, stdout, outputs } = await runAction({ model: 'mock/voice', prompt: 'Hello there, twelve' });
+    assert.equal(code, 0, stdout);
+    assert.match(
+      stdout,
+      /Required parameters you left out get their defaults: voice: "alice", outputFormat: "mp3_44100_128"\./,
+    );
+    assert.deepEqual(mock.state.runs.at(-1).body, {
+      prompt: 'Hello there, twelve',
+      voice: 'alice',
+      outputFormat: 'mp3_44100_128',
+    });
+    assert.equal(outputs['estimated-cost'], '0.00076');
+  });
+
+  it('reports the estimate of a model run and of an LLM request', async () => {
+    const model = await runAction({ model: 'mock/image', prompt: 'x' });
+    assert.equal(model.code, 0, model.stdout);
+    assert.equal(model.outputs['estimated-cost'], '0.005');
+
+    const chats = mock.state.chats.length;
+    const refused = await runAction({ mode: 'llm', model: 'mock/chat', prompt: 'Hello', 'max-cost': '0.001' });
+    assert.equal(refused.code, 1);
+    assert.match(
+      refused.stdout,
+      /::error::The request was not started: the estimated cost is \$0\.002002, above max-cost \$0\.001\./,
+    );
+    assert.equal(mock.state.chats.length, chats);
+
+    const bounded = await runAction({
+      mode: 'llm',
+      model: 'mock/chat',
+      prompt: 'Hello',
+      params: 'max_tokens: 100',
+      'max-cost': '0.001',
+    });
+    assert.equal(bounded.code, 0, bounded.stdout);
+    assert.match(
+      bounded.stdout,
+      /Estimated cost: up to \$0\.000202 \(about 2 input tokens, up to 100 output tokens\)\./,
+    );
+    assert.equal(bounded.outputs['estimated-cost'], '0.000202');
+  });
 });

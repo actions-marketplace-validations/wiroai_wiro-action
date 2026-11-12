@@ -96,6 +96,29 @@ export async function buildChatRequest({ model, prompt, system, extra = {}, file
   return { ...extra, model, messages, stream: false };
 }
 
+/**
+ * A model's gateway entry: its prices per token and output limit
+ * (GET /v1/models/{owner}/{model}). Returns null when it can't be read.
+ * @param {{ llmUrl: string, apiKey: string, apiSecret?: string, model: string, fetchImpl?: typeof fetch }} options
+ */
+export async function fetchModelInfo({ llmUrl, apiKey, apiSecret, model, fetchImpl = fetch }) {
+  try {
+    const response = await fetchImpl(`${llmUrl.replace(/\/+$/, '')}/models/${model}`, {
+      headers: {
+        Authorization: bearerToken({ apiKey, apiSecret }),
+        Accept: 'application/json',
+        'User-Agent': USER_AGENT,
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data && typeof data === 'object' && !data.error ? data : null;
+  } catch {
+    return null;
+  }
+}
+
 /** @param {Headers} headers */
 function retryAfterMs(headers) {
   const value = headers.get('retry-after');

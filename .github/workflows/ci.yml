@@ -160,6 +160,56 @@ jobs:
           OUTCOME: ${{ steps.failed.outcome }}
         run: test "$OUTCOME" = failure
 
+      - name: Run a workflow
+        id: workflow
+        uses: ./
+        with:
+          api-key: test-key
+          api-url: http://127.0.0.1:8787/v1
+          workflow: https://wiro.ai/workflows/promo-video-AbC12
+          params: |
+            brief: A small paper boat on a calm lake
+          max-cost: '0.20'
+          download: true
+          poll-interval: 1
+
+      - name: Check the workflow outputs
+        env:
+          TEXT: ${{ steps.workflow.outputs.text }}
+          URLS: ${{ steps.workflow.outputs.urls }}
+          FILES: ${{ steps.workflow.outputs.files }}
+          ESTIMATE: ${{ steps.workflow.outputs.estimated-cost }}
+          COST: ${{ steps.workflow.outputs.cost }}
+        run: |
+          set -euo pipefail
+          test "$TEXT" = 'A short caption.'
+          test "$(jq length <<< "$URLS")" = 1
+          test -s "$(jq -r '.[0]' <<< "$FILES")"
+          test "$ESTIMATE" = 0.13
+          test "$COST" = 0.13
+
+      - name: Refuse a run above max-cost
+        id: capped
+        continue-on-error: true
+        uses: ./
+        with:
+          api-key: test-key
+          api-url: http://127.0.0.1:8787/v1
+          model: mock/video
+          prompt: x
+          params: |
+            duration: "10"
+          max-cost: '0.20'
+
+      - name: Check that the capped run did not start
+        env:
+          OUTCOME: ${{ steps.capped.outcome }}
+          ESTIMATE: ${{ steps.capped.outputs.estimated-cost }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          test "$ESTIMATE" = 0.25
+
   live:
     name: Live smoke test
     if: github.event_name != 'pull_request'
@@ -193,6 +243,7 @@ jobs:
           prompt: A small paper boat on a calm lake at sunrise, soft light
           params: |
             aspectRatio: "1:1"
+          max-cost: '0.02'
           download: true
           timeout: 300
 
