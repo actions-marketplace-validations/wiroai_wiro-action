@@ -566,6 +566,14 @@ For an API key only project, `api-key` is all you need. For a project that uses 
 
 Set `NODE_USE_ENV_PROXY: 1` next to `HTTPS_PROXY` in the job's `env`, and Node.js sends the action's requests through the proxy. See [Enterprise network configuration](https://nodejs.org/en/learn/http/enterprise-network-configuration) in the Node.js docs.
 
+## Agent skill
+
+This repository includes an agent skill, `wiro-github-action`, in [`skills/wiro-github-action/SKILL.md`](./skills/wiro-github-action/SKILL.md). It shows coding agents such as Claude Code and Cursor how to write workflows with this action: pick the mode and the model, read the key from a secret, set a cost limit and use the results in later steps. Add it to your agent with:
+
+```bash
+npx skills add wiroai/Wiro-Action --skill wiro-github-action
+```
+
 ## Development
 
 ```bash
