@@ -14,10 +14,13 @@ Run Wiro AI models in GitHub Actions: generate images, video, audio and 3D with 
 
 </div>
 
-`wiroai/Wiro-Action` calls the [Wiro AI](https://wiro.ai) API from a workflow step. It has two modes:
+`wiroai/Wiro-Action` calls the [Wiro AI](https://wiro.ai) API from a workflow step. It has three modes:
 
-- **model** runs any model in the catalog, waits for the task to finish and gives you the output URLs, the text and the cost. It can also download the output files into the workspace.
+- **model** runs any model in the catalog, waits for the task to finish and gives you the output URLs, the text and the cost. It can upload files from the workspace as inputs and download the outputs.
+- **workflow** runs one of your Wiro AI workflows, the chains of models you build on wiro.ai, with the inputs you give it, and returns what the workflow's End node shows.
 - **llm** sends a prompt, with files if you like, to the Wiro AI LLM gateway and gives you the answer. The gateway speaks the OpenAI Chat Completions protocol.
+
+In every mode the action estimates the price before it starts, and `max-cost` keeps a run from starting when the estimate is above your limit.
 
 ## Quick start
 
@@ -41,7 +44,7 @@ The image lands in `wiro-output/`, and `steps.image.outputs.url` holds its URL.
 
 ## Model mode
 
-Each model page on [wiro.ai/models](https://wiro.ai/models) shows the model ID (`owner/model`) and its parameters. Put the parameters in `params`, as YAML or JSON. `prompt` is a shortcut for the `prompt` parameter.
+Each model page on [wiro.ai/models](https://wiro.ai/models) shows the model ID (`owner/model`) and its parameters. Put the parameters in `params`, as YAML or JSON. `prompt` is a shortcut for the `prompt` parameter. A required parameter you leave out, such as an output format, gets the default the model's form on wiro.ai starts with, and the log says which ones; file inputs and the prompt are never filled in for you.
 
 The action starts the run, checks the task every `poll-interval` seconds until it ends, and fails the step if the run fails. If `timeout` runs out or the workflow run is cancelled, it stops the task, so you don't pay for a result nobody reads. Set `cancel-on-timeout: false` to let it finish anyway. Only successful runs are billed, and the `cost` output tells you what a run cost.
 
@@ -62,6 +65,29 @@ Models that take images, audio, video or documents accept a public URL in `param
 ```
 
 The action reads the model's parameter list and uploads each file in the form that parameter expects. A parameter that takes several files accepts a list or a glob pattern.
+
+## Workflow mode
+
+Build a workflow on [wiro.ai/workflows](https://wiro.ai/workflows), then pass its link, or its full slug such as `product-ad-a1B2c`, in `workflow`. With `workflow` set, `mode` can be left out.
+
+```yaml
+- uses: wiroai/Wiro-Action@v1
+  id: ad
+  with:
+    api-key: ${{ secrets.WIRO_API_KEY }}
+    workflow: https://wiro.ai/workflows/product-ad-a1B2c
+    params: |
+      brief: A short ad for a reusable water bottle
+    files: |
+      product_photo: assets/bottle.png
+    max-cost: '1.00'
+    download: true
+```
+
+- `params` sets the workflow's inputs by the names its Start node shows. An input you leave out uses its saved value, then its default. The action checks the names and the required inputs before it starts.
+- `files` uploads files from the workspace to your Wiro AI storage and passes their URLs as inputs.
+- The action waits for the run and logs each step as it starts and ends. If a step fails, the action fails and names the step and the reason. When `timeout` runs out, the action stops waiting and fails; the run itself goes on, and its results appear on wiro.ai when it ends. Give long workflows a generous `timeout`.
+- The `outputs` output is a JSON object with each result of the End node, by name. Files are also in `urls` and can be downloaded with `download: true`; texts, such as an LLM's answer, are in `text`.
 
 ## LLM mode
 
@@ -85,44 +111,80 @@ for models that read images and documents. `params` adds Chat Completions fields
     files: pr.diff
 ```
 
-## Examples
+## Cost limit
 
-### Generate a release banner
+Before it starts, the action estimates the price, logs it and sets the `estimated-cost` output:
+
+- **model mode:** the model's price for the settings you send, defaults included, as its page on wiro.ai shows it.
+- **workflow mode:** the sum of those prices over the steps that lead to the End node, plus the creator's fee of a priced gallery workflow. For a workflow whose steps are hidden from you, the estimate Wiro AI gives.
+- **llm mode:** an upper estimate from the model's prices per token, with the input counted from the prompt and files and the output from `max_tokens`, or from the model's output limit when `max_tokens` is not set.
+
+Set `max-cost` to the most a run may cost, in USD. A run whose estimate is higher does not start. Neither does a run whose price is only known after it ends, such as a model billed by run time, because the action can't confirm it stays under the limit. LLM token use inside a model or workflow run is billed when the run ends: the action leaves it out of the estimate and says so in the log.
 
 ```yaml
-name: Release banner
+- uses: wiroai/Wiro-Action@v1
+  with:
+    api-key: ${{ secrets.WIRO_API_KEY }}
+    model: pruna/p-video-2
+    prompt: The paper boat drifts across the lake as the sun comes up
+    params: |
+      duration: "10"
+      resolution: 720p
+    max-cost: '0.20' # this run is estimated at $0.25, so it does not start
+```
+
+## Examples
+
+Each example is a complete workflow file: copy it to `.github/workflows/` and add the `WIRO_API_KEY` secret.
+
+### Summarize a pull request
+
+```yaml
+name: Pull request summary
 
 on:
-  release:
-    types: [published]
+  pull_request:
+    types: [opened, ready_for_review]
 
 permissions:
-  contents: write
+  contents: read
+  pull-requests: write
 
 jobs:
-  banner:
+  summary:
+    # Pull requests from forks and from Dependabot don't receive repository secrets.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: wiroai/Wiro-Action@v1
-        id: banner
+      - uses: actions/checkout@v7
         with:
-          api-key: ${{ secrets.WIRO_API_KEY }}
-          model: pruna/p-image
-          prompt: >-
-            A clean, wide banner for a software release named
-            "${{ github.event.release.name }}", abstract shapes, soft light
-          params: |
-            aspectRatio: "16:9"
-          download: true
+          fetch-depth: 0
 
-      - name: Attach the banner to the release
+      - name: Save the diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: git diff "$BASE" HEAD -- . ':!package-lock.json' > pr.diff
+
+      - uses: wiroai/Wiro-Action@v1
+        id: summary
+        with:
+          mode: llm
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          model: openai/gpt-5-4-mini
+          system: You write short, factual pull request summaries for reviewers.
+          prompt: >-
+            Summarize this pull request in at most five bullet points.
+            Then list anything a reviewer should look at closely.
+          files: pr.diff
+          params: |
+            reasoning_effort: low
+
+      - name: Comment on the pull request
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
-          FILES: ${{ steps.banner.outputs.files }}
-        run: |
-          cp "$(jq -r '.[0]' <<< "$FILES")" release-banner.jpg
-          gh release upload "$TAG" release-banner.jpg --repo "$GITHUB_REPOSITORY"
+          PR: ${{ github.event.pull_request.number }}
+          SUMMARY: ${{ steps.summary.outputs.text }}
+        run: printf '%s\n' "$SUMMARY" | gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file -
 ```
 
 ### Write alt text for changed images
@@ -183,91 +245,293 @@ jobs:
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file -
 ```
 
-### Summarize a pull request
+### Make a release banner and a short video
+
+The second step turns the banner into a five-second video, and `max-cost` keeps it from starting if the price is above $0.20.
 
 ```yaml
-name: Pull request summary
+name: Release media
 
 on:
-  pull_request:
-    types: [opened, ready_for_review]
+  release:
+    types: [published]
 
 permissions:
-  contents: read
-  pull-requests: write
+  contents: write
 
 jobs:
-  summary:
-    # Pull requests from forks and from Dependabot don't receive repository secrets.
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+  media:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: wiroai/Wiro-Action@v1
+        id: banner
         with:
-          fetch-depth: 0
-
-      - name: Save the diff
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: git diff "$BASE" HEAD -- . ':!package-lock.json' > pr.diff
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          model: pruna/p-image
+          prompt: >-
+            A clean, wide banner for a software release named
+            "${{ github.event.release.name }}", abstract shapes, soft light
+          params: |
+            aspectRatio: "16:9"
+          download: true
+          download-dir: media
 
       - uses: wiroai/Wiro-Action@v1
-        id: summary
+        id: video
+        with:
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          model: pruna/p-video-2
+          prompt: Slow camera push in, the shapes drift and the light shifts gently
+          params: |
+            inputImage: ${{ steps.banner.outputs.url }}
+            duration: "5"
+            resolution: 720p
+          max-cost: '0.20'
+          timeout: 900
+          download: true
+          download-dir: media
+
+      - name: Attach the banner and the video to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          BANNER: ${{ steps.banner.outputs.files }}
+          VIDEO: ${{ steps.video.outputs.files }}
+        run: |
+          cp "$(jq -r '.[0]' <<< "$BANNER")" release-banner.jpg
+          cp "$(jq -r '.[0]' <<< "$VIDEO")" release-video.mp4
+          gh release upload "$TAG" release-banner.jpg release-video.mp4 --repo "$GITHUB_REPOSITORY"
+```
+
+### Read the release notes aloud
+
+An LLM turns the notes into a short script, a voice model reads it, and the MP3 goes on the release.
+
+```yaml
+name: Release notes audio
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  narrate:
+    if: github.event.release.body != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: wiroai/Wiro-Action@v1
+        id: script
         with:
           mode: llm
           api-key: ${{ secrets.WIRO_API_KEY }}
           model: openai/gpt-5-4-mini
-          system: You write short, factual pull request summaries for reviewers.
-          prompt: >-
-            Summarize this pull request in at most five bullet points.
-            Then list anything a reviewer should look at closely.
-          files: pr.diff
+          system: >-
+            You turn release notes into a script to be read aloud: plain sentences,
+            no Markdown, no links, under 120 words.
+          prompt: ${{ github.event.release.body }}
           params: |
             reasoning_effort: low
 
-      - name: Comment on the pull request
+      - uses: wiroai/Wiro-Action@v1
+        id: voice
+        with:
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          model: elevenlabs/eleven-v4-turbo
+          prompt: ${{ steps.script.outputs.text }}
+          params: |
+            voice: alice
+          max-cost: '0.10'
+          download: true
+
+      - name: Attach the audio to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          SUMMARY: ${{ steps.summary.outputs.text }}
-        run: printf '%s\n' "$SUMMARY" | gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file -
+          TAG: ${{ github.event.release.tag_name }}
+          FILES: ${{ steps.voice.outputs.files }}
+        run: |
+          cp "$(jq -r '.[0]' <<< "$FILES")" release-notes.mp3
+          gh release upload "$TAG" release-notes.mp3 --repo "$GITHUB_REPOSITORY"
 ```
+
+### Translate the README in a pull request
+
+Run it from the Actions tab and pick the language. Opening the pull request needs **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**.
+
+```yaml
+name: Translate the README
+
+on:
+  workflow_dispatch:
+    inputs:
+      language:
+        description: The language to translate into
+        default: Turkish
+      code:
+        description: The language code for the file name, as in README.tr.md
+        default: tr
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: wiroai/Wiro-Action@v1
+        id: translate
+        with:
+          mode: llm
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          model: openai/gpt-5-4-mini
+          system: >-
+            You translate Markdown documents. Keep the Markdown, code blocks, links,
+            HTML and product names as they are. Answer with the translated document only.
+          prompt: Translate README.md into ${{ inputs.language }}.
+          files: README.md
+          params: |
+            reasoning_effort: low
+          max-cost: '0.50'
+
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRANSLATION: ${{ steps.translate.outputs.text }}
+          LANGUAGE: ${{ inputs.language }}
+          CODE: ${{ inputs.code }}
+        run: |
+          branch="translate-readme-$CODE-$GITHUB_RUN_ID"
+          git switch -c "$branch"
+          printf '%s\n' "$TRANSLATION" > "README.$CODE.md"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "README.$CODE.md"
+          git commit -m "docs: translate the README into $LANGUAGE"
+          git push origin "$branch"
+          gh pr create --head "$branch" --title "Translate the README into $LANGUAGE" \
+            --body "A $LANGUAGE translation of README.md, made with Wiro AI. Please read it through before merging."
+```
+
+### Make a social share card
+
+```yaml
+name: Social card
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: The headline on the card
+        required: true
+
+jobs:
+  card:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: wiroai/Wiro-Action@v1
+        with:
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          model: openai/gpt-image-2
+          prompt: >-
+            A clean social media card with the headline "${{ inputs.title }}" in large,
+            bold type, plenty of white space and one simple abstract shape in a corner
+          params: |
+            ratio: "16:9"
+            quality: medium
+          max-cost: '0.05'
+          download: true
+          download-dir: card
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: social-card
+          path: card/
+```
+
+### Run one of your workflows
+
+Replace the link with your own workflow's, and the input names with the ones its Start node shows.
+
+```yaml
+name: Product video
+
+on:
+  workflow_dispatch:
+    inputs:
+      brief:
+        description: What the video should show
+        required: true
+
+jobs:
+  video:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: wiroai/Wiro-Action@v1
+        with:
+          api-key: ${{ secrets.WIRO_API_KEY }}
+          workflow: https://wiro.ai/workflows/product-ad-a1B2c
+          params: |
+            brief: ${{ toJSON(inputs.brief) }}
+          files: |
+            product_photo: assets/product.png
+          max-cost: '1.00'
+          timeout: 1800
+          download: true
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: product-video
+          path: wiro-output/
+```
+
+`toJSON()` writes free text as a quoted string, so quotes, colons and line breaks in it can't break the YAML of `params`.
 
 ## Inputs
 
-| Input               | Default                  | Description                                                                                                    |
-| ------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `api-key`           |                          | **Required.** Your Wiro AI project API key. Keep it in a secret.                                               |
-| `api-secret`        |                          | The project's API secret, for projects that use signature authentication.                                      |
-| `mode`              | `model`                  | `model` runs a model and waits for the task. `llm` sends one chat request to the LLM gateway.                  |
-| `model`             |                          | **Required.** The model ID, `owner/model`, for example `pruna/p-image` or `openai/gpt-5-4-mini`.               |
-| `prompt`            |                          | llm mode: the message to send (required). model mode: sent as the `prompt` parameter.                          |
-| `system`            |                          | llm mode: the system prompt.                                                                                   |
-| `params`            |                          | A JSON or YAML mapping. model mode: the model parameters. llm mode: extra Chat Completions fields.             |
-| `files`             |                          | model mode: a mapping of file parameter to path, list or glob. llm mode: paths or glob patterns, one per line. |
-| `timeout`           | `600`                    | Seconds to wait for the result.                                                                                |
-| `poll-interval`     | `3`                      | model mode: seconds between task status checks.                                                                |
-| `cancel-on-timeout` | `true`                   | model mode: stop the task when `timeout` runs out or the workflow run is cancelled.                            |
-| `download`          | `false`                  | model mode: download the output files.                                                                         |
-| `download-dir`      | `wiro-output`            | model mode: the folder for downloaded files, relative to the workspace.                                        |
-| `summary`           | `true`                   | Write the result, with images and the answer, to the job summary.                                              |
-| `api-url`           | `https://api.wiro.ai/v1` | The Wiro AI API base URL.                                                                                      |
-| `llm-url`           | `https://llm.wiro.ai/v1` | The Wiro AI LLM gateway base URL.                                                                              |
+| Input               | Default                  | Description                                                                                                                                                                                          |
+| ------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api-key`           |                          | **Required.** Your Wiro AI project API key. Keep it in a secret.                                                                                                                                     |
+| `api-secret`        |                          | The project's API secret, for projects that use signature authentication.                                                                                                                            |
+| `mode`              |                          | `model` runs a model and waits for the task. `workflow` runs one of your workflows. `llm` sends one chat request to the LLM gateway. When empty: `workflow` if `workflow` is set, otherwise `model`. |
+| `model`             |                          | model and llm modes: the model ID, `owner/model`, for example `pruna/p-image` or `openai/gpt-5-4-mini`.                                                                                              |
+| `workflow`          |                          | workflow mode: the workflow's link on wiro.ai, or its full slug, such as `product-ad-a1B2c`.                                                                                                         |
+| `prompt`            |                          | llm mode: the message to send (required). model and workflow modes: sent as the `prompt` parameter or input.                                                                                         |
+| `system`            |                          | llm mode: the system prompt.                                                                                                                                                                         |
+| `params`            |                          | A JSON or YAML mapping. model mode: the model parameters. workflow mode: the workflow inputs. llm mode: extra Chat Completions fields.                                                               |
+| `files`             |                          | model and workflow modes: a mapping of parameter or input name to a path, list or glob. llm mode: paths or glob patterns, one per line.                                                              |
+| `max-cost`          |                          | The most a run may cost, in USD, such as `0.50`. A run whose estimate is higher, or whose price can't be confirmed under it, does not start.                                                         |
+| `timeout`           | `600`                    | Seconds to wait for the result.                                                                                                                                                                      |
+| `poll-interval`     | `3`                      | model and workflow modes: seconds between status checks.                                                                                                                                             |
+| `cancel-on-timeout` | `true`                   | model mode: stop the task when `timeout` runs out or the workflow run is cancelled.                                                                                                                  |
+| `download`          | `false`                  | model and workflow modes: download the output files.                                                                                                                                                 |
+| `download-dir`      | `wiro-output`            | model and workflow modes: the folder for downloaded files, relative to the workspace.                                                                                                                |
+| `summary`           | `true`                   | Write the result, with images and answers, to the job summary.                                                                                                                                       |
+| `api-url`           | `https://api.wiro.ai/v1` | The Wiro AI API base URL.                                                                                                                                                                            |
+| `llm-url`           | `https://llm.wiro.ai/v1` | The Wiro AI LLM gateway base URL.                                                                                                                                                                    |
 
 Paths in `files` and `download-dir` are relative to the workspace. Patterns that start with `!` leave files out.
 
 ## Outputs
 
-| Output     | Mode  | Description                                                                                                                          |
-| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `task-id`  | model | The Wiro AI task ID.                                                                                                                 |
-| `url`      | model | The URL of the first output file.                                                                                                    |
-| `urls`     | model | A JSON array with the URLs of all output files.                                                                                      |
-| `files`    | model | A JSON array with the downloaded file paths, relative to the workspace.                                                              |
-| `outputs`  | model | The task's outputs as a JSON array of objects with `name`, `contenttype`, `size`, `url` and, for LLMs, `content`.                    |
-| `text`     | both  | The text answer: the reply in llm mode. In model mode, the answer of an LLM, or the text file a model returns, such as a transcript. |
-| `cost`     | both  | The amount billed for the run, in USD.                                                                                               |
-| `response` | llm   | The full Chat Completions response as JSON, for tool calls and other details.                                                        |
+| Output           | Mode            | Description                                                                                                                                                                                                                |
+| ---------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task-id`        | model           | The Wiro AI task ID.                                                                                                                                                                                                       |
+| `run-token`      | workflow        | The token of the workflow run. It is masked in the logs.                                                                                                                                                                   |
+| `url`            | model, workflow | The URL of the first output file.                                                                                                                                                                                          |
+| `urls`           | model, workflow | A JSON array with the URLs of all output files.                                                                                                                                                                            |
+| `files`          | model, workflow | A JSON array with the downloaded file paths, relative to the workspace.                                                                                                                                                    |
+| `outputs`        | model, workflow | model mode: the task's outputs as a JSON array of objects with `name`, `contenttype`, `size`, `url` and, for LLMs, `content`. workflow mode: a JSON object with each result of the End node, as a list of files and texts. |
+| `text`           | all             | The text answer: the reply in llm mode. In model mode, the answer of an LLM, or the text file a model returns, such as a transcript. In workflow mode, the text results.                                                   |
+| `cost`           | all             | The amount billed for the run, in USD.                                                                                                                                                                                     |
+| `estimated-cost` | all             | The price estimated before the run, in USD; empty when it is not known before the run. In llm mode it is an upper estimate.                                                                                                |
+| `response`       | llm             | The full Chat Completions response as JSON, for tool calls and other details.                                                                                                                                              |
 
 Read JSON outputs with `fromJSON()` in expressions, for example `fromJSON(steps.image.outputs.urls)[0]`, or with `jq` in a script.
 
@@ -297,7 +561,7 @@ npm run lint
 
 `dist/` is committed, because GitHub runs the action from the repository. Run `npm run build` and commit `dist/` with every change; CI checks that it matches the source. The CI workflow also runs the action against the mock API in `test/mock-server.js`, and runs a live test when the repository has a `WIRO_API_KEY` secret.
 
-To release, update the version in `package.json` and `src/version.js`, tag the commit `vX.Y.Z`, move the `v1` tag to the same commit, and publish a GitHub release for `vX.Y.Z`.
+To release, update the version in `package.json` and `src/version.js` and the [changelog](./CHANGELOG.md), tag the commit `vX.Y.Z`, move the `v1` tag to the same commit, and publish a GitHub release for `vX.Y.Z` with **Publish this Action to the GitHub Marketplace** ticked.
 
 ## More from Wiro AI
 

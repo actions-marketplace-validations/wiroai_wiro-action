@@ -12,7 +12,7 @@ export default [
     },
     rules: {
       eqeqeq: ['error', 'always'],
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'prefer-const': 'error',
     },
   },

@@ -1075,14 +1075,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path10 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path11 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path10 && path10[0] !== "/") {
-          path10 = `/${path10}`;
+        if (path11 && path11[0] !== "/") {
+          path11 = `/${path11}`;
         }
-        return new URL(`${origin}${path10}`);
+        return new URL(`${origin}${path11}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1533,39 +1533,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path10, origin }
+          request: { method, path: path11, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path10);
+        debuglog("sending request to %s %s/%s", method, origin, path11);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path10, origin },
+          request: { method, path: path11, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path10,
+          path11,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path10, origin }
+          request: { method, path: path11, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path10);
+        debuglog("trailers received from %s %s/%s", method, origin, path11);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path10, origin },
+          request: { method, path: path11, origin },
           error: error2
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path10,
+          path11,
           error2.message
         );
       });
@@ -1614,9 +1614,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path10, origin }
+            request: { method, path: path11, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path10);
+          debuglog("sending request to %s %s/%s", method, origin, path11);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1679,7 +1679,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request = class {
       constructor(origin, {
-        path: path10,
+        path: path11,
         method,
         body,
         headers,
@@ -1694,11 +1694,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path10 !== "string") {
+        if (typeof path11 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path10[0] !== "/" && !(path10.startsWith("http://") || path10.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path11[0] !== "/" && !(path11.startsWith("http://") || path11.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path10)) {
+        } else if (invalidPathRegex.test(path11)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1764,7 +1764,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path10, query) : path10;
+        this.path = query ? buildURL(path11, query) : path11;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6457,7 +6457,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path10, host, upgrade, blocking, reset } = request;
+      const { method, path: path11, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util.isFormDataLike(body)) {
@@ -6538,7 +6538,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path10} HTTP/1.1\r
+      let header = `${method} ${path11} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -7067,7 +7067,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path10, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path11, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
         util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -7164,7 +7164,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path10;
+      headers[HTTP2_HEADER_PATH] = path11;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -7517,9 +7517,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path10 = search ? `${pathname}${search}` : pathname;
+        const path11 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path10;
+        this.opts.path = path11;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8758,10 +8758,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path10 = "/",
+          path: path11 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path10;
+        opts.path = origin + path11;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -10733,20 +10733,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path10) {
-      if (typeof path10 !== "string") {
-        return path10;
+    function safeUrl(path11) {
+      if (typeof path11 !== "string") {
+        return path11;
       }
-      const pathSegments = path10.split("?");
+      const pathSegments = path11.split("?");
       if (pathSegments.length !== 2) {
-        return path10;
+        return path11;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path10, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path10);
+    function matchKey(mockDispatch2, { path: path11, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path11);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10768,7 +10768,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path10 }) => matchValue(safeUrl(path10), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path11 }) => matchValue(safeUrl(path11), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10806,9 +10806,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path10, method, body, headers, query } = opts;
+      const { path: path11, method, body, headers, query } = opts;
       return {
-        path: path10,
+        path: path11,
         method,
         body,
         headers,
@@ -11271,10 +11271,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path10, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path11, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path10,
+            Path: path11,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -16153,9 +16153,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path10) {
-      for (let i = 0; i < path10.length; ++i) {
-        const code = path10.charCodeAt(i);
+    function validateCookiePath(path11) {
+      for (let i = 0; i < path11.length; ++i) {
+        const code = path11.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code > 126 || // exclude DEL and non-ascii
         code === 59) {
@@ -19075,11 +19075,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path10 = opts.path;
+          let path11 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path10 = `/${path10}`;
+            path11 = `/${path11}`;
           }
-          url = new URL(util.parseOrigin(url).origin + path10);
+          url = new URL(util.parseOrigin(url).origin + path11);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -19227,17 +19227,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path10) {
-      const ctrl = callVisitor(key, node, visitor, path10);
+    function visit_(key, node, visitor, path11) {
+      const ctrl = callVisitor(key, node, visitor, path11);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path10, ctrl);
-        return visit_(key, ctrl, visitor, path10);
+        replaceNode(key, path11, ctrl);
+        return visit_(key, ctrl, visitor, path11);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path10 = Object.freeze(path10.concat(node));
+          path11 = Object.freeze(path11.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path10);
+            const ci = visit_(i, node.items[i], visitor, path11);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -19248,13 +19248,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path10 = Object.freeze(path10.concat(node));
-          const ck = visit_("key", node.key, visitor, path10);
+          path11 = Object.freeze(path11.concat(node));
+          const ck = visit_("key", node.key, visitor, path11);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path10);
+          const cv = visit_("value", node.value, visitor, path11);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -19275,17 +19275,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path10) {
-      const ctrl = await callVisitor(key, node, visitor, path10);
+    async function visitAsync_(key, node, visitor, path11) {
+      const ctrl = await callVisitor(key, node, visitor, path11);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path10, ctrl);
-        return visitAsync_(key, ctrl, visitor, path10);
+        replaceNode(key, path11, ctrl);
+        return visitAsync_(key, ctrl, visitor, path11);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path10 = Object.freeze(path10.concat(node));
+          path11 = Object.freeze(path11.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path10);
+            const ci = await visitAsync_(i, node.items[i], visitor, path11);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -19296,13 +19296,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path10 = Object.freeze(path10.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path10);
+          path11 = Object.freeze(path11.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path11);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path10);
+          const cv = await visitAsync_("value", node.value, visitor, path11);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -19329,23 +19329,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path10) {
+    function callVisitor(key, node, visitor, path11) {
       if (typeof visitor === "function")
-        return visitor(key, node, path10);
+        return visitor(key, node, path11);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path10);
+        return visitor.Map?.(key, node, path11);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path10);
+        return visitor.Seq?.(key, node, path11);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path10);
+        return visitor.Pair?.(key, node, path11);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path10);
+        return visitor.Scalar?.(key, node, path11);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path10);
+        return visitor.Alias?.(key, node, path11);
       return void 0;
     }
-    function replaceNode(key, path10, node) {
-      const parent = path10[path10.length - 1];
+    function replaceNode(key, path11, node) {
+      const parent = path11[path11.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -19957,10 +19957,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path10, value) {
+    function collectionFromPath(schema, path11, value) {
       let v = value;
-      for (let i = path10.length - 1; i >= 0; --i) {
-        const k = path10[i];
+      for (let i = path11.length - 1; i >= 0; --i) {
+        const k = path11[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -19979,7 +19979,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path10) => path10 == null || typeof path10 === "object" && !!path10[Symbol.iterator]().next().done;
+    var isEmptyPath = (path11) => path11 == null || typeof path11 === "object" && !!path11[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -20009,11 +20009,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path10, value) {
-        if (isEmptyPath(path10))
+      addIn(path11, value) {
+        if (isEmptyPath(path11))
           this.add(value);
         else {
-          const [key, ...rest] = path10;
+          const [key, ...rest] = path11;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -20027,8 +20027,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path10) {
-        const [key, ...rest] = path10;
+      deleteIn(path11) {
+        const [key, ...rest] = path11;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -20042,8 +20042,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path10, keepScalar) {
-        const [key, ...rest] = path10;
+      getIn(path11, keepScalar) {
+        const [key, ...rest] = path11;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -20061,8 +20061,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path10) {
-        const [key, ...rest] = path10;
+      hasIn(path11) {
+        const [key, ...rest] = path11;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -20072,8 +20072,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path10, value) {
-        const [key, ...rest] = path10;
+      setIn(path11, value) {
+        const [key, ...rest] = path11;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -22588,9 +22588,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path10, value) {
+      addIn(path11, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path10, value);
+          this.contents.addIn(path11, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -22665,14 +22665,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path10) {
-        if (Collection.isEmptyPath(path10)) {
+      deleteIn(path11) {
+        if (Collection.isEmptyPath(path11)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path10) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path11) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -22687,10 +22687,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path10, keepScalar) {
-        if (Collection.isEmptyPath(path10))
+      getIn(path11, keepScalar) {
+        if (Collection.isEmptyPath(path11))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path10, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path11, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -22701,10 +22701,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path10) {
-        if (Collection.isEmptyPath(path10))
+      hasIn(path11) {
+        if (Collection.isEmptyPath(path11))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path10) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path11) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -22721,13 +22721,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path10, value) {
-        if (Collection.isEmptyPath(path10)) {
+      setIn(path11, value) {
+        if (Collection.isEmptyPath(path11)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path10), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path11), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path10, value);
+          this.contents.setIn(path11, value);
         }
       }
       /**
@@ -24688,9 +24688,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path10) => {
+    visit.itemAtPath = (cst, path11) => {
       let item = cst;
-      for (const [field, index] of path10) {
+      for (const [field, index] of path11) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -24699,23 +24699,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path10) => {
-      const parent = visit.itemAtPath(cst, path10.slice(0, -1));
-      const field = path10[path10.length - 1][0];
+    visit.parentCollection = (cst, path11) => {
+      const parent = visit.itemAtPath(cst, path11.slice(0, -1));
+      const field = path11[path11.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path10, item, visitor) {
-      let ctrl = visitor(item, path10);
+    function _visit(path11, item, visitor) {
+      let ctrl = visitor(item, path11);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path10.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path11.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -24726,10 +24726,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path10);
+            ctrl = ctrl(item, path11);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path10) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path11) : ctrl;
     }
     exports.visit = visit;
   }
@@ -26482,7 +26482,7 @@ var require_dist = __commonJS({
 
 // src/main.js
 import { randomUUID as randomUUID2 } from "node:crypto";
-import path9 from "node:path";
+import path10 from "node:path";
 
 // node_modules/@actions/core/lib/command.js
 import * as os from "os";
@@ -27032,6 +27032,12 @@ var LlmError = class extends Error {
     this.status = status;
     this.code = code;
     this.type = type;
+  }
+};
+var CostError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CostError";
   }
 };
 
@@ -29330,8 +29336,8 @@ var Pattern = class _Pattern {
 
 // node_modules/@actions/glob/lib/internal-search-state.js
 var SearchState = class {
-  constructor(path10, level) {
-    this.path = path10;
+  constructor(path11, level) {
+    this.path = path11;
     this.level = level;
   }
 };
@@ -29608,8 +29614,8 @@ function create(patterns, options) {
 }
 
 // src/version.js
-var VERSION = "1.0.0";
-var USER_AGENT = `wiro-action/${VERSION} (+https://github.com/wiroai/wiro-action)`;
+var VERSION = "1.1.0";
+var USER_AGENT = `wiro-action/${VERSION} (+https://github.com/wiroai/Wiro-Action)`;
 
 // src/files.js
 var GLOB_CHARS = /[*?[\]{}]/;
@@ -29784,7 +29790,8 @@ async function downloadOutputs(outputs, dir, options = {}) {
 // src/inputs.js
 var import_yaml = __toESM(require_dist(), 1);
 var DEFAULTS = Object.freeze({
-  mode: "model",
+  // Empty: `workflow` when the workflow input is set, else `model`.
+  mode: "",
   timeout: 600,
   "poll-interval": 3,
   "cancel-on-timeout": true,
@@ -29804,12 +29811,26 @@ function parseModel(value, mode) {
   const [owner, project] = id.split("/");
   return { id, owner, project };
 }
-function parseMode(value) {
-  const mode = String(value || DEFAULTS.mode).trim().toLowerCase();
-  if (mode !== "model" && mode !== "llm") {
-    throw new InputError(`\`mode\` must be \`model\` or \`llm\`, not \`${value}\`.`);
+var MODES = ["model", "llm", "workflow"];
+function parseMode(value, { workflow = "" } = {}) {
+  const mode = String(value ?? "").trim().toLowerCase();
+  if (!mode) return String(workflow).trim() ? "workflow" : "model";
+  if (!MODES.includes(mode)) {
+    throw new InputError(`\`mode\` must be \`model\`, \`llm\` or \`workflow\`, not \`${value}\`.`);
   }
-  return mode;
+  return (
+    /** @type {'model' | 'llm' | 'workflow'} */
+    mode
+  );
+}
+function parseMaxCost(value) {
+  const text = String(value ?? "").trim().replace(/^\$/, "");
+  if (!text) return void 0;
+  const amount = Number(text);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new InputError(`\`max-cost\` must be an amount in USD, such as \`0.50\`, not \`${value}\`.`);
+  }
+  return amount;
 }
 function parseStructured(value, name) {
   const text = String(value ?? "").trim();
@@ -29919,9 +29940,316 @@ function bearerToken({ apiKey, apiSecret }) {
 // src/model.js
 import { openAsBlob } from "node:fs";
 import path7 from "node:path";
+
+// src/pricing.js
+import { inflateSync } from "node:zlib";
+var BILLED_METHODS = /* @__PURE__ */ new Set([
+  "cps",
+  "cpr",
+  "cp-promptlength",
+  "cp-audiosecondslength",
+  "cpo",
+  "cpt",
+  "cp-pixel",
+  "cp-realtimeturn",
+  "cp-readoutput",
+  "cp-outputVideoLength"
+]);
+var FILE_TYPES = /* @__PURE__ */ new Set(["fileinput", "multifileinput", "multifileinputdrop", "combinefileinput"]);
+var TOKENS_PER_IMAGE = 1600;
+var TOKENS_PER_PDF_PAGE = 1600;
+var CHARS_PER_TOKEN = 3;
+var toNumber = (value) => {
+  const number = parseFloat(String(value));
+  return Number.isFinite(number) ? number : 0;
+};
+var isNumeric = (value) => value !== "" && value !== null && Number.isFinite(Number(value));
+function parsePriceRows(value) {
+  let rows = value;
+  if (typeof rows === "string") {
+    try {
+      rows = JSON.parse(rows);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(rows) ? rows.filter((row) => row && typeof row === "object") : [];
+}
+function isLlmTool(tool) {
+  const categories = Array.isArray(tool?.categories) ? tool.categories : [];
+  return categories.some((category) => /(^|-)llm(-|$)/.test(String(category)));
+}
+function startingValue(item) {
+  if (String(item?.type ?? "").toLowerCase() === "checkbox" && Object.prototype.hasOwnProperty.call(item, "value")) {
+    return item.value;
+  }
+  return item?.defaultvalue;
+}
+function runValues(tool, params) {
+  const values = {};
+  for (const group of Array.isArray(tool?.parameters) ? tool.parameters : []) {
+    for (const item of Array.isArray(group?.items) ? group.items : []) {
+      if (!item?.id) continue;
+      const id = String(item.id);
+      if (FILE_TYPES.has(item.type) || id.includes("input") || id === "prompt" && item.required !== true) continue;
+      const fallback = startingValue(item);
+      if (fallback !== void 0 && fallback !== null && fallback !== "") values[id] = fallback;
+    }
+  }
+  return { ...values, ...params };
+}
+function isQuantity(value) {
+  return typeof value === "string" && value.includes("QUANTITY:");
+}
+function countItems(value) {
+  if (Array.isArray(value)) return value.length;
+  return value ? 1 : 0;
+}
+function sameValue(expected, actual) {
+  if (actual === void 0 || actual === null || actual === "") return false;
+  if (String(expected) === String(actual)) return true;
+  return isNumeric(expected) && isNumeric(actual) && Number(expected) === Number(actual);
+}
+function rowPrice(row, tool, selected, discounted) {
+  const method = typeof row.priceMethod === "string" ? row.priceMethod : "";
+  const price = toNumber(row.price);
+  const note = typeof row.note === "string" && row.note.trim() ? row.note.trim() : void 0;
+  const priced = (amount, basis) => ({
+    kind: "priced",
+    value: discounted(amount),
+    method,
+    ...basis ? { basis } : {}
+  });
+  const perUnit = (unit) => ({ kind: "per-unit", rate: discounted(price), unit, method, ...note ? { note } : {} });
+  const average = toNumber(tool?.approximatelycost);
+  if (!BILLED_METHODS.has(method)) return { kind: "unknown", method };
+  switch (method) {
+    case "cpr":
+    case "cp-pixel":
+      return priced(price);
+    case "cpo": {
+      const outputs = Math.max(1, Math.floor(toNumber(selected.samples)) || 1);
+      return priced(price * outputs);
+    }
+    case "cp-promptlength": {
+      const prompt = selected.prompt;
+      return typeof prompt === "string" && prompt ? priced(price * prompt.length) : perUnit("character of the prompt");
+    }
+    case "cp-outputVideoLength": {
+      const seconds = toNumber(selected.duration);
+      return seconds > 0 ? priced(price * seconds) : perUnit("second of video");
+    }
+    case "cp-readoutput":
+    case "cp-realtimeturn":
+      return price > 0 ? priced(price, "listed") : { kind: "metered", method, ...note ? { note } : {} };
+    case "cps":
+      return average > 0 ? priced(average, "average") : perUnit("second of run time");
+    case "cpt":
+      return perUnit("token");
+    case "cp-audiosecondslength":
+      return perUnit("second of input audio");
+    default:
+      return { kind: "unknown", method };
+  }
+}
+function priceStep(tool, values) {
+  const discount = toNumber(tool?.discount);
+  const discounted = (amount) => roundUsd(discount > 0 ? amount * (1 - discount / 100) : amount);
+  const rows = parsePriceRows(tool?.dynamicprice);
+  if (!rows.length) {
+    const average = toNumber(tool?.approximatelycost);
+    if (average > 0) return { kind: "priced", value: discounted(average), basis: "average" };
+    const perSecond = toNumber(tool?.cps) || toNumber(tool?.quegroupcps);
+    if (perSecond > 0)
+      return { kind: "per-unit", rate: discounted(perSecond), unit: "second of run time", method: "cps" };
+    return { kind: "unknown" };
+  }
+  const selected = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== void 0 && value !== null && value !== "") selected[key] = value;
+  }
+  let best;
+  for (const [index, row] of rows.entries()) {
+    const inputs = row.inputs && typeof row.inputs === "object" ? row.inputs : {};
+    const entries = Object.entries(inputs);
+    const counted = entries.filter(([, expected]) => isQuantity(expected));
+    if (!counted.length) {
+      if (entries.every(([key, expected]) => sameValue(expected, selected[key]))) {
+        return rowPrice(row, tool, selected, discounted);
+      }
+      continue;
+    }
+    const plainMatch = entries.filter(([, expected]) => !isQuantity(expected)).every(([key, expected]) => sameValue(expected, selected[key]));
+    if (!plainMatch) continue;
+    for (const [key, expected] of counted) {
+      const wanted = parseInt(String(expected).split("QUANTITY:")[1], 10);
+      const sent = countItems(selected[key]);
+      if (wanted === sent) return rowPrice(row, tool, selected, discounted);
+      if (wanted <= sent && (!best || wanted > best.wanted)) best = { wanted, index };
+    }
+  }
+  if (best) return rowPrice(rows[best.index], tool, selected, discounted);
+  return { kind: "unknown" };
+}
+function priceModelRun(tool, params, files = {}) {
+  const values = runValues(tool, params);
+  for (const [id, paths] of Object.entries(files)) {
+    const urls = params[id] === void 0 ? [] : Array.isArray(params[id]) ? params[id] : [params[id]];
+    values[id] = [...urls, ...paths];
+  }
+  return priceStep(tool, values);
+}
+function sumEstimate(steps) {
+  let total = 0;
+  let known = 0;
+  const parts = [];
+  for (const { label, tool, price } of steps) {
+    if (price.kind === "priced") {
+      total += price.value ?? 0;
+      known += 1;
+      if (price.basis) parts.push({ label, price, llm: isLlmTool(tool) });
+    } else {
+      parts.push({ label, price, llm: isLlmTool(tool) });
+    }
+  }
+  return { value: known || !steps.length ? roundUsd(total) : null, parts };
+}
+function unboundedParts(estimate) {
+  return estimate.parts.filter((part) => {
+    const { kind, basis } = part.price;
+    if (part.llm && kind !== "unknown") return false;
+    return kind !== "priced" || basis === "average" || basis === "listed";
+  });
+}
+var HIDDEN_REASONS = {
+  metered: "its price is set when it ends",
+  "no-price": "it has no price for its settings",
+  "start-field": "its price depends on an input",
+  "choose-setting": "its price depends on a setting",
+  "per-unit": "it is priced per unit of use",
+  "earlier-step": "its price depends on an earlier step"
+};
+function describePart(part) {
+  const { price } = part;
+  if (price.kind === "priced" && price.basis === "listed")
+    return `${part.label}: listed estimate, the run sets the final price`;
+  if (price.kind === "priced" && price.basis === "average") return `${part.label}: average of past runs`;
+  if (price.kind === "per-unit") return `${part.label}: $${formatUsd(price.rate ?? 0)} per ${price.unit}`;
+  if (price.kind === "metered") {
+    return part.llm ? `${part.label}: billed by tokens when the run ends` : `${part.label}: the run sets its price when it ends${price.note ? ` (${price.note})` : ""}`;
+  }
+  if (price.reason) {
+    const field = price.field ? ` \`${price.field}\`` : "";
+    const reason = HIDDEN_REASONS[price.reason] ?? `its price is not known before the run (${price.reason})`;
+    return `${part.label}: ${price.reason === "start-field" && field ? `its price depends on the input${field}` : reason}`;
+  }
+  return `${part.label}: no price for these settings`;
+}
+function roundUsd(amount) {
+  return Math.round(amount * 1e10) / 1e10;
+}
+function formatUsd(amount) {
+  if (!Number.isFinite(amount) || amount === 0) return "0";
+  const decimals = amount >= 0.01 ? 4 : amount >= 1e-4 ? 6 : 10;
+  return amount.toFixed(decimals).replace(/0+$/, "").replace(/\.$/, "");
+}
+function enforceMaxCost(estimate, maxCost, what) {
+  if (maxCost === void 0) return;
+  const unbounded = unboundedParts(estimate);
+  if (unbounded.length) {
+    throw new CostError(
+      `${what} was not started: its price can't be confirmed under max-cost $${formatUsd(maxCost)} before it runs. ${unbounded.map(describePart).join("; ")}. Remove max-cost to run it anyway.`
+    );
+  }
+  const value = estimate.value ?? 0;
+  if (value > maxCost) {
+    throw new CostError(
+      `${what} was not started: the estimated cost is $${formatUsd(value)}, above max-cost $${formatUsd(maxCost)}.`
+    );
+  }
+}
+function countPdfPages(data) {
+  const text = data.toString("latin1");
+  const chunks = [text];
+  const streamStart = /\/Type\s*\/ObjStm[^]*?>>\s*stream\r?\n/g;
+  for (const match3 of text.matchAll(streamStart)) {
+    if (!/\/FlateDecode/.test(match3[0])) continue;
+    const start = (match3.index ?? 0) + match3[0].length;
+    const end = text.indexOf("endstream", start);
+    if (end === -1) continue;
+    try {
+      chunks.push(inflateSync(data.subarray(start, end)).toString("latin1"));
+    } catch {
+    }
+  }
+  let pages = 0;
+  let declared = 0;
+  for (const chunk of chunks) {
+    pages += (chunk.match(/\/Type\s*\/Page(?!s)/g) ?? []).length;
+    for (const tree of chunk.matchAll(/\/Type\s*\/Pages\b[^]*?\/Count\s+(\d+)/g)) {
+      declared = Math.max(declared, Number(tree[1]));
+    }
+  }
+  return Math.max(1, pages, declared);
+}
+function tokenRates(model, inputTokens) {
+  const tiers = Array.isArray(model?.x_wiro?.pricing_tiers) ? model.x_wiro.pricing_tiers : [];
+  const fits = (tier2) => (tier2.maxInputTokens === void 0 || inputTokens <= Number(tier2.maxInputTokens)) && (tier2.minInputTokensExclusive === void 0 || inputTokens > Number(tier2.minInputTokensExclusive));
+  const tier = tiers.find((entry) => entry && typeof entry === "object" && fits(entry));
+  if (tier) return { prompt: toNumber(tier.prompt), completion: toNumber(tier.completion) };
+  if (tiers.length) {
+    return {
+      prompt: Math.max(...tiers.map((entry) => toNumber(entry?.prompt))),
+      completion: Math.max(...tiers.map((entry) => toNumber(entry?.completion)))
+    };
+  }
+  return { prompt: toNumber(model?.pricing?.prompt), completion: toNumber(model?.pricing?.completion) };
+}
+function estimateChat({ body, model }) {
+  const label = String(body?.model ?? model?.id ?? "the model");
+  const flat = tokenRates(model, 0);
+  if (!model?.pricing || flat.prompt <= 0 && flat.completion <= 0) {
+    return { value: null, parts: [{ label, price: { kind: "metered" }, llm: false }] };
+  }
+  let characters = 0;
+  let images = 0;
+  let pages = 0;
+  for (const message of Array.isArray(body?.messages) ? body.messages : []) {
+    const content = message?.content;
+    if (typeof content === "string") {
+      characters += content.length;
+      continue;
+    }
+    for (const part of Array.isArray(content) ? content : []) {
+      if (part?.type === "text") characters += String(part.text ?? "").length;
+      else if (part?.type === "image_url") images += 1;
+      else if (part?.type === "file") {
+        const data = String(part.file?.file_data ?? "").split(",")[1] ?? "";
+        pages += countPdfPages(Buffer.from(data, "base64"));
+      }
+    }
+  }
+  const inputTokens = Math.ceil(characters / CHARS_PER_TOKEN) + images * TOKENS_PER_IMAGE + pages * TOKENS_PER_PDF_PAGE;
+  const limit = toNumber(body?.max_completion_tokens) || toNumber(body?.max_tokens) || toNumber(model?.top_provider?.max_completion_tokens) || toNumber(model?.max_tokens);
+  const rates = tokenRates(model, inputTokens);
+  if (!limit) {
+    return {
+      value: null,
+      parts: [{ label, price: { kind: "per-unit", rate: rates.completion, unit: "output token" }, llm: false }]
+    };
+  }
+  return {
+    value: roundUsd(inputTokens * rates.prompt + limit * rates.completion),
+    parts: [],
+    inputTokens,
+    outputTokens: limit
+  };
+}
+
+// src/model.js
 var TERMINAL_STATUSES = /* @__PURE__ */ new Set(["task_postprocess_end", "task_cancel"]);
 var QUEUED_STATUSES = /* @__PURE__ */ new Set(["task_queue", "task_accept", "task_preprocess_start", "task_preprocess_end"]);
-var FILE_TYPES = /* @__PURE__ */ new Set(["fileinput", "multifileinput", "multifileinputdrop", "combinefileinput"]);
+var FILE_TYPES2 = /* @__PURE__ */ new Set(["fileinput", "multifileinput", "multifileinputdrop", "combinefileinput"]);
 var SINGLE_FILE_TYPES = /* @__PURE__ */ new Set(["fileinput"]);
 var REFUSAL_LIMIT_MS = 12e4;
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -29935,22 +30263,45 @@ function formValue(value) {
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
-async function readParameterTypes(api, model, log2) {
+async function readTool(api, model, log2, consequence = "") {
   try {
     const detail = await api.toolDetail(model.owner, model.project);
     const tool = Array.isArray(detail?.tool) ? detail.tool[0] : void 0;
-    if (!tool) return null;
-    const types2 = /* @__PURE__ */ new Map();
-    for (const group of Array.isArray(tool.parameters) ? tool.parameters : []) {
-      for (const item of Array.isArray(group?.items) ? group.items : []) {
-        if (item?.id) types2.set(String(item.id), String(item.type ?? ""));
-      }
-    }
-    return types2;
+    if (tool) return tool;
+    log2.warning(`Could not read the parameters of ${model.id}.${consequence ? ` ${consequence}` : ""}`);
   } catch (err) {
-    log2.warning(`Could not read the parameters of ${model.id} (${err.message}). Files are sent as given.`);
-    return null;
+    log2.warning(
+      `Could not read the parameters of ${model.id} (${err.message}).${consequence ? ` ${consequence}` : ""}`
+    );
   }
+  return null;
+}
+function parameterTypes(tool) {
+  const types2 = /* @__PURE__ */ new Map();
+  for (const group of Array.isArray(tool?.parameters) ? tool.parameters : []) {
+    for (const item of Array.isArray(group?.items) ? group.items : []) {
+      if (item?.id) types2.set(String(item.id), String(item.type ?? ""));
+    }
+  }
+  return types2;
+}
+function requiredDefaults(tool, params, files) {
+  const filled = {};
+  for (const group of Array.isArray(tool?.parameters) ? tool.parameters : []) {
+    for (const item of Array.isArray(group?.items) ? group.items : []) {
+      if (item?.required !== true || !item.id) continue;
+      const id = String(item.id);
+      if (id in params || id in files || id === "prompt" || id.includes("input") || FILE_TYPES2.has(item.type)) continue;
+      const fallback = startingValue(item);
+      if (fallback === void 0 || fallback === null || fallback === "") continue;
+      filled[id] = fallback;
+    }
+  }
+  return filled;
+}
+async function readParameterTypes(api, model, log2) {
+  const tool = await readTool(api, model, log2, "Files are sent as given.");
+  return tool ? parameterTypes(tool) : null;
 }
 async function buildMultipart({ params, files, types: types2, model }) {
   const form = new FormData();
@@ -29965,12 +30316,12 @@ async function buildMultipart({ params, files, types: types2, model }) {
   for (const [id, paths] of Object.entries(files)) {
     const type = types2?.get(id);
     if (types2 && !type) {
-      const fileParams = [...types2].filter(([, t]) => FILE_TYPES.has(t)).map(([name]) => `\`${name}\``);
+      const fileParams = [...types2].filter(([, t]) => FILE_TYPES2.has(t)).map(([name]) => `\`${name}\``);
       throw new InputError(
         `${model.id} has no parameter named \`${id}\`. ` + (fileParams.length ? `Its file parameters are ${fileParams.join(", ")}.` : "It takes no files.")
       );
     }
-    if (type && !FILE_TYPES.has(type)) {
+    if (type && !FILE_TYPES2.has(type)) {
       throw new InputError(`\`${id}\` is a ${type} parameter of ${model.id}, not a file parameter.`);
     }
     if (SINGLE_FILE_TYPES.has(type) && paths.length > 1) {
@@ -30008,16 +30359,12 @@ function explainRunError(err, model) {
   }
   return new WiroApiError(message, { code: err.code, status: err.status });
 }
-async function submitRun(api, model, body, deadline, log2, firstWaitMs = 5e3) {
+async function withConcurrencyRetry(start, deadline, log2, firstWaitMs = 5e3) {
   let wait = firstWaitMs;
   for (; ; ) {
     try {
       const remaining = deadline - Date.now();
-      const data = await api.run(model.owner, model.project, body, Math.max(3e4, Math.min(remaining, 3e5)));
-      if (!data?.taskid || !data?.socketaccesstoken) {
-        throw new WiroApiError("The Run API answered without a task ID.");
-      }
-      return { taskId: String(data.taskid), token: String(data.socketaccesstoken) };
+      return await start(Math.max(3e4, Math.min(remaining, 3e5)));
     } catch (err) {
       if (err instanceof WiroApiError && err.code === 96 && Date.now() + wait < deadline) {
         log2.info(`${err.message} Trying again in ${Math.round(wait / 1e3)} s.`);
@@ -30025,8 +30372,24 @@ async function submitRun(api, model, body, deadline, log2, firstWaitMs = 5e3) {
         wait = Math.min(wait * 2, 6e4);
         continue;
       }
-      throw explainRunError(err, model);
+      throw err;
     }
+  }
+}
+async function submitRun(api, model, body, deadline, log2, firstWaitMs = 5e3) {
+  try {
+    const data = await withConcurrencyRetry(
+      (timeoutMs) => api.run(model.owner, model.project, body, timeoutMs),
+      deadline,
+      log2,
+      firstWaitMs
+    );
+    if (!data?.taskid || !data?.socketaccesstoken) {
+      throw new WiroApiError("The Run API answered without a task ID.");
+    }
+    return { taskId: String(data.taskid), token: String(data.socketaccesstoken) };
+  } catch (err) {
+    throw explainRunError(err, model);
   }
 }
 async function stopTask(api, handle, log2, { timeoutMs = 15e3 } = {}) {
@@ -30115,23 +30478,20 @@ function extractText(task, outputs) {
   const raw = outputs.find(
     (output) => output.contenttype === "raw" && output.content && typeof output.content === "object"
   );
-  if (raw) {
-    const content = (
-      /** @type {any} */
-      raw.content
-    );
-    const segments = Array.isArray(content.segments) ? content.segments : [];
-    const answer = segments.filter((segment) => segment?.type === "answer" && typeof segment.text === "string").map((segment) => segment.text).join("").trim();
-    if (answer) return answer;
-    if (Array.isArray(content.answer)) {
-      const joined = content.answer.filter((part) => typeof part === "string").join("").trim();
-      if (joined) return joined;
-    }
-    if (typeof content.raw === "string" && content.raw.trim()) return content.raw.trim();
-    return debugOutput;
-  }
+  if (raw) return rawAnswer(raw.content) || debugOutput;
   if (outputs.some((output) => output.url)) return "";
   return debugOutput;
+}
+function rawAnswer(content) {
+  if (!content || typeof content !== "object") return "";
+  const segments = Array.isArray(content.segments) ? content.segments : [];
+  const answer = segments.filter((segment) => segment?.type === "answer" && typeof segment.text === "string").map((segment) => segment.text).join("").trim();
+  if (answer) return answer;
+  if (Array.isArray(content.answer)) {
+    const joined = content.answer.filter((part) => typeof part === "string").join("").trim();
+    if (joined) return joined;
+  }
+  return typeof content.raw === "string" ? content.raw.trim() : "";
 }
 function finishReason(task) {
   const raw = (Array.isArray(task?.outputs) ? task.outputs : []).find(
@@ -30171,12 +30531,13 @@ async function runModel({
   log: log2,
   onTask,
   onSubmit,
-  refusalLimitMs
+  refusalLimitMs,
+  tool
 }) {
   const deadline = Date.now() + timeoutMs;
   let body = params;
   if (Object.keys(files).length) {
-    const types2 = await readParameterTypes(api, model, log2);
+    const types2 = tool ? parameterTypes(tool) : await readParameterTypes(api, model, log2);
     body = await buildMultipart({ params, files, types: types2, model });
   }
   const submitting = submitRun(api, model, body, deadline, log2);
@@ -30289,6 +30650,23 @@ async function buildChatRequest({ model, prompt, system, extra = {}, files = [],
   if (system) messages.push({ role: "system", content: system });
   messages.push({ role: "user", content: await buildUserContent(prompt, files, workspace) });
   return { ...extra, model, messages, stream: false };
+}
+async function fetchModelInfo({ llmUrl, apiKey, apiSecret, model, fetchImpl = fetch }) {
+  try {
+    const response = await fetchImpl(`${llmUrl.replace(/\/+$/, "")}/models/${model}`, {
+      headers: {
+        Authorization: bearerToken({ apiKey, apiSecret }),
+        Accept: "application/json",
+        "User-Agent": USER_AGENT
+      },
+      signal: AbortSignal.timeout(15e3)
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data && typeof data === "object" && !data.error ? data : null;
+  } catch {
+    return null;
+  }
 }
 function retryAfterMs(headers) {
   const value = headers.get("retry-after");
@@ -30430,20 +30808,53 @@ function modelSummary({ modelId, taskId, cost, elapsedSeconds, outputs, text, fi
     "| Task | Cost (USD) | Time |",
     "| --- | --- | --- |",
     `| ${cell(taskId)} | ${cell(cost || "0")} | ${elapsedSeconds ? `${elapsedSeconds} s` : ""} |`,
-    ""
+    "",
+    ...fileLines(outputs)
   ];
-  const withUrl = outputs.filter((output) => output.url);
-  const isImage = (output) => String(output.contenttype ?? "").startsWith("image/");
-  const images = withUrl.filter(isImage).map(
-    (output) => `<img src="${escapeHtml(output.url ?? "")}" alt="${escapeHtml(output.name || "output")}" width="480">`
-  );
-  const links = withUrl.filter((output) => !isImage(output)).map((output) => `- [${cell(output.name || "output").replace(/[[\]]/g, "")}](${output.url})`);
-  if (images.length) lines.push(images.join("\n"), "");
-  if (links.length) lines.push(...links, "");
   if (files.length) {
     lines.push(`Downloaded: ${files.map((file) => `\`${file}\``).join(", ")}`, "");
   }
   if (text) lines.push(truncated(text), "");
+  return lines.join("\n");
+}
+function fileLines(outputs) {
+  const withUrl = outputs.filter((output) => output.url);
+  const isImage = (output) => String(output.contenttype ?? "").startsWith("image/") || !output.contenttype && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(output.url ?? "");
+  const images = withUrl.filter(isImage).map(
+    (output) => `<img src="${escapeHtml(output.url ?? "")}" alt="${escapeHtml(output.name || "output")}" width="480">`
+  );
+  const links = withUrl.filter((output) => !isImage(output)).map((output) => `- [${cell(output.name || output.url || "output").replace(/[[\]]/g, "")}](${output.url})`);
+  const lines = [];
+  if (images.length) lines.push(images.join("\n"), "");
+  if (links.length) lines.push(...links, "");
+  return lines;
+}
+function workflowSummary({ slug, title, cost, elapsedSeconds, nodes, results, files }) {
+  const lines = [
+    `### Wiro AI workflow: ${cell(title || slug)}`,
+    "",
+    "| Workflow | Cost (USD) | Time |",
+    "| --- | --- | --- |",
+    `| ${cell(slug)} | ${cell(cost || "0")} | ${elapsedSeconds ? `${elapsedSeconds} s` : ""} |`,
+    ""
+  ];
+  if (nodes.length) {
+    lines.push("| Step | Model | Status | Time |", "| --- | --- | --- | --- |");
+    for (const node of nodes) {
+      lines.push(
+        `| ${cell(node.nodeId)} | ${cell(node.tool)} | ${cell(node.status)} | ${node.elapsedseconds ? `${cell(node.elapsedseconds)} s` : ""} |`
+      );
+    }
+    lines.push("");
+  }
+  for (const [name, items] of Object.entries(results)) {
+    lines.push(`**${cell(name)}**`, "", ...fileLines(items));
+    const text = items.filter((item) => item.text).map((item) => item.text).join("\n\n");
+    if (text) lines.push(truncated(text), "");
+  }
+  if (files.length) {
+    lines.push(`Downloaded: ${files.map((file) => `\`${file}\``).join(", ")}`, "");
+  }
   return lines.join("\n");
 }
 function llmSummary({ modelId, cost, finishReason: finishReason2, usage, text }) {
@@ -30462,6 +30873,8 @@ function llmSummary({ modelId, cost, finishReason: finishReason2, usage, text })
 }
 
 // src/wiro.js
+import { openAsBlob as openAsBlob2 } from "node:fs";
+import path9 from "node:path";
 function createRunApi({ apiUrl, apiKey, apiSecret, fetchImpl = fetch }) {
   const base = apiUrl.replace(/\/+$/, "");
   async function post(route, body, timeoutMs = 6e4) {
@@ -30510,7 +30923,357 @@ function createRunApi({ apiUrl, apiKey, apiSecret, fetchImpl = fetch }) {
     taskDetail: (taskToken, timeoutMs) => post("/Task/Detail", { tasktoken: taskToken }, timeoutMs),
     cancel: (taskId, timeoutMs) => post("/Task/Cancel", { taskid: taskId }, timeoutMs),
     kill: (taskToken, timeoutMs) => post("/Task/Kill", { socketaccesstoken: taskToken }, timeoutMs),
-    toolDetail: (owner, project) => post("/Tool/Detail", { slugowner: owner, slugproject: project })
+    toolDetail: (owner, project) => post("/Tool/Detail", { slugowner: owner, slugproject: project }),
+    workflowDetail: (slug) => post("/Workflow/Detail", { slug }),
+    workflowRun: (slug, input2, timeoutMs) => post("/Workflow/Run", { slug, input: input2 }, timeoutMs),
+    workflowRunDetail: (workflowToken, timeoutMs) => post("/Workflow/RunDetail", { workflowtoken: workflowToken }, timeoutMs),
+    uploadFile: async (file) => {
+      const form = new FormData();
+      form.append("file", await openAsBlob2(file, { type: mimeType(file) }), path9.basename(file));
+      const data = await post("/File/Upload", form, 3e5);
+      const uploaded = Array.isArray(data?.list) ? data.list[0] : void 0;
+      if (!uploaded?.url) throw new WiroApiError(`File/Upload returned no URL for ${path9.basename(file)}.`);
+      return uploaded;
+    }
+  };
+}
+
+// src/text.js
+var LINE_BREAKS = new RegExp("[\\u0000-\\u001f\\u007f\\u2028\\u2029]+", "g");
+function oneLine(value) {
+  return String(value ?? "").replace(LINE_BREAKS, " ").trim();
+}
+
+// src/workflow.js
+var TERMINAL_RUN_STATUSES = /* @__PURE__ */ new Set(["completed", "failed", "stopped", "cancelled"]);
+var FULL_SLUG = /^[A-Za-z0-9][A-Za-z0-9-]*-[A-Za-z0-9]{5}$/;
+var EARLIER_STEP = Object.freeze({ earlierStep: true });
+var sleep4 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function parseWorkflowSlug(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    throw new InputError(
+      "`workflow` is required in workflow mode: the full slug, such as `product-ad-a1B2c`, or the link to the workflow on wiro.ai."
+    );
+  }
+  let candidates = [text];
+  if (/^https?:\/\//i.test(text)) {
+    try {
+      candidates = new URL(text).pathname.split("/").filter(Boolean).reverse();
+    } catch {
+      candidates = [];
+    }
+  }
+  const slug = candidates.map((part) => decodeURIComponent(part)).find((part) => FULL_SLUG.test(part));
+  if (!slug) {
+    throw new InputError(
+      `\`workflow\` must be a full workflow slug, such as \`product-ad-a1B2c\`, or its link on wiro.ai, not \`${text}\`.`
+    );
+  }
+  return slug;
+}
+var listNames = (names) => names.map((name) => `\`${name}\``).join(", ");
+function graphOf(contents) {
+  if (typeof contents === "string") {
+    try {
+      return JSON.parse(contents);
+    } catch {
+      return {};
+    }
+  }
+  return contents && typeof contents === "object" ? contents : {};
+}
+function checkWorkflowInputs(workflow, slug, params, fileFields) {
+  const schema = graphOf(workflow?.contents)?.schema?.input;
+  const known = schema && typeof schema === "object" ? Object.keys(schema) : null;
+  const given = [.../* @__PURE__ */ new Set([...Object.keys(params), ...fileFields])];
+  for (const field of fileFields) {
+    if (field in params) throw new InputError(`\`${field}\` is set in both \`files\` and \`params\`. Use one of them.`);
+  }
+  if (known) {
+    const unknown = given.filter((name) => !known.includes(name));
+    if (unknown.length) {
+      throw new InputError(
+        `${slug} has no input named ${listNames(unknown)}. ` + (known.length ? `Its inputs are ${listNames(known)}.` : "It takes no inputs.")
+      );
+    }
+  }
+  const required = Array.isArray(workflow?.requiredinputs) ? workflow.requiredinputs.map(String) : [];
+  const missing = required.filter((name) => !given.includes(name));
+  if (missing.length) {
+    throw new InputError(`${slug} needs a value for ${listNames(missing)}. Set it in \`params\` or \`files\`.`);
+  }
+}
+function startValues(contents, given) {
+  const graph = graphOf(contents);
+  const schema = graph?.schema?.input && typeof graph.schema.input === "object" ? graph.schema.input : {};
+  const saved = graph?.metadata?.input?.values && typeof graph.metadata.input.values === "object" ? graph.metadata.input.values : {};
+  const values = {};
+  for (const [key, field] of Object.entries(schema)) {
+    if (given[key] !== void 0) values[key] = given[key];
+    else if (saved[key] !== void 0 && saved[key] !== "") values[key] = saved[key];
+    else if (field?.defaultValue !== void 0 && field.defaultValue !== "") values[key] = field.defaultValue;
+  }
+  for (const [key, value] of Object.entries(given)) if (!(key in values)) values[key] = value;
+  return values;
+}
+function stepsToRun(nodes) {
+  const seen = /* @__PURE__ */ new Set();
+  const order = [];
+  const visit = (id) => {
+    if (seen.has(id) || id === "input") return;
+    seen.add(id);
+    for (const dependency of Array.isArray(nodes?.[id]?.depends) ? nodes[id].depends : []) visit(String(dependency));
+    if (id !== "output" && nodes?.[id]) order.push(id);
+  };
+  visit("output");
+  return order;
+}
+function resolveStepValue(value, start) {
+  if (typeof value === "string" && value.startsWith("$input.")) return start[value.slice("$input.".length)];
+  if (typeof value === "string" && value.startsWith("$node-")) return EARLIER_STEP;
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      const resolved = resolveStepValue(item, start);
+      return Array.isArray(resolved) ? resolved : [resolved];
+    }).filter((item) => item !== void 0 && item !== "");
+  }
+  return value;
+}
+function endFields(graph) {
+  const nested = graph?.nodes?.output?.fields;
+  if (nested && typeof nested === "object" && Object.keys(nested).length) return nested;
+  return graph?.output && typeof graph.output === "object" ? graph.output : {};
+}
+function hasHiddenSteps(graph) {
+  const nodes = graph?.nodes && typeof graph.nodes === "object" ? graph.nodes : {};
+  const referenced = /* @__PURE__ */ new Set();
+  for (const reference of Object.values(endFields(graph))) {
+    const step = typeof reference === "string" ? reference.match(/^\$(node-[A-Za-z0-9_-]+)\./) : null;
+    if (step) referenced.add(step[1]);
+  }
+  for (const dependency of Array.isArray(nodes.output?.depends) ? nodes.output.depends : []) {
+    if (dependency !== "input") referenced.add(String(dependency));
+  }
+  return [...referenced].some((id) => !nodes[id]);
+}
+function creatorFee(workflow) {
+  const amount = (value) => {
+    const fee = Number(value);
+    return Number.isFinite(fee) && fee > 0 ? fee : 0;
+  };
+  if (workflow?.clonedfromid !== void 0 && workflow?.clonedfromid !== null) return amount(workflow.runchargeamount);
+  const listed = Number(workflow?.ispublic) === 1 && Number(workflow?.status) === 2;
+  return Number(workflow?.ismonetized) === 1 && listed ? amount(workflow.amount) : 0;
+}
+async function estimateWorkflowCost(api, workflow, values, log2) {
+  const graph = graphOf(workflow?.contents);
+  const nodes = graph?.nodes && typeof graph.nodes === "object" ? graph.nodes : {};
+  const fee = creatorFee(workflow);
+  const feeStep = fee ? [{ label: "the workflow creator's fee", tool: null, price: { kind: "priced", value: fee } }] : [];
+  if (hasHiddenSteps(graph)) {
+    const given = workflow?.estimatedcost;
+    const value = Number(given?.value);
+    if (given?.type !== "estimated" || !Number.isFinite(value)) {
+      return {
+        value: null,
+        parts: [{ label: "The hidden steps", price: { kind: "unknown" }, llm: false }],
+        source: "server"
+      };
+    }
+    const details = Array.isArray(given.details) ? given.details : [];
+    const parts = details.map((detail) => ({
+      label: "A hidden step",
+      price: {
+        kind: (
+          /** @type {const} */
+          "unknown"
+        ),
+        reason: String(detail?.code ?? "unknown"),
+        ...detail?.startfield ? { field: String(detail.startfield) } : {}
+      },
+      llm: false
+    }));
+    return { value: roundUsd(value + fee), parts, source: "server" };
+  }
+  const steps = stepsToRun(nodes).filter((id) => {
+    const tool = nodes[id]?.tool;
+    return typeof tool === "string" && tool && !tool.startsWith("workflow-utilities/");
+  });
+  const tools = /* @__PURE__ */ new Map();
+  const priced = [];
+  for (const id of steps) {
+    const slug = String(nodes[id].tool);
+    const label = `${id} (${slug})`;
+    if (!tools.has(slug)) {
+      const [owner, project] = slug.split("/");
+      try {
+        const detail = await api.toolDetail(owner, project);
+        tools.set(slug, Array.isArray(detail?.tool) ? detail.tool[0] ?? null : null);
+      } catch (err) {
+        log2.debug(`Tool/Detail for ${slug} failed: ${err.message}`);
+        tools.set(slug, null);
+      }
+    }
+    const tool = tools.get(slug);
+    if (!tool) {
+      priced.push({ label, tool: null, price: { kind: "unknown" } });
+      continue;
+    }
+    const input2 = {};
+    for (const [key, value] of Object.entries(nodes[id].input ?? {})) input2[key] = resolveStepValue(value, values);
+    priced.push({ label, tool, price: priceStep(tool, runValues(tool, input2)) });
+  }
+  return sumEstimate([...priced, ...feeStep]);
+}
+async function submitWorkflowRun(api, slug, input2, deadline, log2, firstWaitMs) {
+  try {
+    const data = await withConcurrencyRetry(
+      (timeoutMs) => api.workflowRun(slug, input2, timeoutMs),
+      deadline,
+      log2,
+      firstWaitMs
+    );
+    if (!data?.workflowtoken) throw new WiroApiError("Workflow/Run answered without a run token.");
+    return { token: String(data.workflowtoken) };
+  } catch (err) {
+    if (err instanceof WiroApiError && err.code === 97) {
+      throw new WiroApiError(`${err.message}. Add funds at https://wiro.ai/panel/billing.`, { code: 97 });
+    }
+    throw err;
+  }
+}
+var RUN_GOES_ON = "The run keeps going on Wiro AI, and its results appear there when it ends.";
+async function waitForWorkflowRun(api, handle, { deadline, pollMs, timeoutMs, log: log2, refusalLimitMs = REFUSAL_LIMIT_MS }) {
+  const stepStatus = /* @__PURE__ */ new Map();
+  let failures = 0;
+  let refusingSince;
+  for (; ; ) {
+    let data;
+    try {
+      data = await api.workflowRunDetail(handle.token, Math.max(5e3, Math.min(6e4, deadline - Date.now())));
+      failures = 0;
+      refusingSince = void 0;
+    } catch (err) {
+      if (err instanceof WiroApiError && (err.status === 401 || err.status === 403)) throw err;
+      if (err instanceof WiroApiError && !err.retryable) {
+        refusingSince ??= Date.now();
+        if (Date.now() - refusingSince >= refusalLimitMs) {
+          throw new TaskError(`Stopped waiting for the workflow run: ${err.message} ${RUN_GOES_ON}`);
+        }
+      } else {
+        failures += 1;
+      }
+      const note = `Workflow/RunDetail failed (${err.message}); trying again.`;
+      if (failures === 3) log2.warning(note);
+      else log2.debug(note);
+    }
+    const run2 = data?.workflowrun;
+    if (run2?.status) {
+      handle.status = String(run2.status);
+      handle.nodes = Array.isArray(data.workflowrunnodes) ? data.workflowrunnodes : [];
+      for (const node of handle.nodes) {
+        if (!node?.nodeId || stepStatus.get(node.nodeId) === node.status) continue;
+        stepStatus.set(node.nodeId, node.status);
+        log2.info(`Step ${oneLine(node.nodeId)}${node.tool ? ` (${oneLine(node.tool)})` : ""}: ${oneLine(node.status)}`);
+      }
+      if (TERMINAL_RUN_STATUSES.has(handle.status)) return data;
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await sleep4(Math.min(pollMs, remaining));
+  }
+  throw new TaskError(`The workflow run did not finish within ${Math.round(timeoutMs / 1e3)} s. ${RUN_GOES_ON}`);
+}
+function assertRunCompleted(data) {
+  const status = String(data?.workflowrun?.status ?? "");
+  if (status === "completed") return;
+  const nodes = Array.isArray(data?.workflowrunnodes) ? data.workflowrunnodes : [];
+  if (status === "failed") {
+    const failed = nodes.filter((node) => node?.status === "failed").map(
+      (node) => `${node.nodeId}${node.tool ? ` (${node.tool})` : ""} failed` + (node.cause ? ` (${node.cause})` : "") + (node.error ? `: ${String(node.error).trim()}` : "")
+    );
+    throw new TaskError(
+      `The workflow run failed. ${failed.length ? `${failed.join("; ")}.` : "No step reported why."}`
+    );
+  }
+  if (status === "cancelled") throw new TaskError("The workflow run was cancelled.");
+  throw new TaskError(`The workflow run ended as ${status || "unknown"}.`);
+}
+function resultItems(raw) {
+  const list = Array.isArray(raw) ? raw : raw === void 0 || raw === null || raw === "" ? [] : [raw];
+  const items = [];
+  for (const entry of list) {
+    if (typeof entry === "string") {
+      items.push(/^https?:\/\/\S+$/i.test(entry.trim()) ? { url: entry.trim() } : { text: entry.trim() });
+    } else if (typeof entry === "number" || typeof entry === "boolean") {
+      items.push({ text: String(entry) });
+    } else if (entry && typeof entry === "object") {
+      if (entry.contenttype === "raw") {
+        items.push({ contenttype: "raw", text: rawAnswer(entry.content) });
+        continue;
+      }
+      const [item] = normalizeOutputs({ outputs: [entry] });
+      if (item && (item.url || item.name)) {
+        delete item.content;
+        items.push(item);
+      }
+    }
+  }
+  return items;
+}
+function workflowResults(data) {
+  const run2 = data?.workflowrun ?? {};
+  const graph = graphOf(run2.contents);
+  const fields = endFields(graph);
+  const nodes = new Map(
+    (Array.isArray(data?.workflowrunnodes) ? data.workflowrunnodes : []).map((node) => [String(node?.nodeId), node])
+  );
+  const saved = graph?.metadata?.input?.values ?? {};
+  const results = {};
+  for (const [name, reference] of Object.entries(fields)) {
+    if (typeof reference !== "string") {
+      results[name] = [];
+      continue;
+    }
+    const step = reference.match(/^\$(node-[A-Za-z0-9_-]+)\.(.+)$/);
+    if (step) {
+      const node = nodes.get(step[1]);
+      const outputs = node?.outputs;
+      const port = step[2];
+      results[name] = resultItems(port === "outputs" ? outputs : outputs?.[port]);
+      continue;
+    }
+    const start = reference.match(/^\$input\.(.+)$/);
+    results[name] = resultItems(start ? saved[start[1]] : reference);
+  }
+  return results;
+}
+async function runWorkflow({ api, slug, input: input2, timeoutMs, pollMs, log: log2, onRun, onSubmit, refusalLimitMs }) {
+  const deadline = Date.now() + timeoutMs;
+  const submitting = submitWorkflowRun(api, slug, input2, deadline, log2);
+  onSubmit?.(submitting);
+  const handle = await submitting;
+  onRun?.(handle);
+  log2.info(`Started a run of ${slug}.`);
+  const data = await waitForWorkflowRun(api, handle, { deadline, pollMs, timeoutMs, log: log2, refusalLimitMs });
+  assertRunCompleted(data);
+  const run2 = data.workflowrun;
+  const results = workflowResults(data);
+  const items = Object.values(results).flat();
+  return {
+    handle,
+    run: run2,
+    nodes: handle.nodes ?? [],
+    results,
+    urls: items.filter((item) => item.url).map((item) => (
+      /** @type {string} */
+      item.url
+    )),
+    files: items.filter((item) => item.url),
+    text: items.filter((item) => item.text).map((item) => item.text).join("\n\n"),
+    cost: formatCost(run2.chargedcost ?? run2.totalcost),
+    elapsedSeconds: Number(run2.elapsedseconds) || void 0
   };
 }
 
@@ -30537,8 +31300,8 @@ function printUntrusted(title, text) {
   info(`::${token}::`);
   endGroup();
 }
-var sleep4 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-function stopTaskOnCancel(api, getHandle, getPending) {
+var sleep5 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function stopOnCancel(target) {
   let stopping = false;
   const onSignal = (signal) => {
     if (stopping) return;
@@ -30546,15 +31309,15 @@ function stopTaskOnCancel(api, getHandle, getPending) {
     const exit = () => process.exit(1);
     setTimeout(exit, 9e3).unref();
     (async () => {
-      let handle = getHandle();
-      const pending = getPending();
+      let handle = target.current();
+      const pending = target.pending();
       if (!handle && pending) {
-        warning(`Received ${signal} while the run was starting, waiting for its task to stop it.`);
-        handle = await Promise.race([pending.catch(() => void 0), sleep4(6e3).then(() => void 0)]);
+        warning(`Received ${signal} while the run was starting, waiting for it to stop it.`);
+        handle = await Promise.race([pending.catch(() => void 0), sleep5(6e3).then(() => void 0)]);
       }
-      if (!handle || handle.status && TERMINAL_STATUSES.has(handle.status)) return;
-      warning(`Received ${signal}, stopping task ${handle.taskId}.`);
-      await stopTask(api, handle, log, { timeoutMs: 2500 });
+      if (!handle || target.isOver(handle)) return;
+      warning(`Received ${signal}, stopping ${target.name(handle)}.`);
+      await target.stop(handle);
     })().finally(exit);
   };
   process.on("SIGINT", onSignal);
@@ -30564,40 +31327,89 @@ function stopTaskOnCancel(api, getHandle, getPending) {
     process.off("SIGTERM", onSignal);
   };
 }
+function reportEstimate(estimate, maxCost, what, { upTo = false } = {}) {
+  const known = estimate.value !== null;
+  setOutput("estimated-cost", known ? formatCost(estimate.value) : "");
+  if (known) {
+    let line = `Estimated cost: ${upTo ? "up to " : ""}$${formatUsd(estimate.value ?? 0)}`;
+    if (estimate.inputTokens !== void 0) {
+      line += ` (about ${estimate.inputTokens} input tokens, up to ${estimate.outputTokens} output tokens)`;
+    }
+    info(`${line}.`);
+  } else {
+    info("Estimated cost: not known before the run.");
+  }
+  for (const part of estimate.parts) info(`  ${describePart(part)}`);
+  enforceMaxCost(estimate, maxCost, what);
+  if (maxCost !== void 0 && estimate.parts.some((part) => part.llm && part.price.kind !== "priced")) {
+    warning("LLM token use is billed when the run ends and is not part of the estimate checked against max-cost.");
+  }
+}
+function promptInto(params, value) {
+  if (!value) return;
+  if ("prompt" in params) throw new InputError("The prompt is set in both `prompt` and `params`. Use one of them.");
+  params.prompt = value;
+}
+function taskOptions(workspace) {
+  return {
+    timeoutMs: parseSeconds(input("timeout"), "timeout", DEFAULTS.timeout) * 1e3,
+    pollMs: parseSeconds(input("poll-interval"), "poll-interval", DEFAULTS["poll-interval"]) * 1e3,
+    cancelOnTimeout: parseBoolean(input("cancel-on-timeout"), "cancel-on-timeout", DEFAULTS["cancel-on-timeout"]),
+    download: parseBoolean(input("download"), "download", DEFAULTS.download),
+    downloadDir: path10.resolve(workspace, input("download-dir") || DEFAULTS["download-dir"]),
+    summary: parseBoolean(input("summary"), "summary", DEFAULTS.summary),
+    apiUrl: parseBaseUrl(input("api-url"), "api-url", DEFAULTS["api-url"]),
+    maxCost: parseMaxCost(input("max-cost"))
+  };
+}
+async function fileMapping(workspace) {
+  const files = {};
+  for (const [id, patterns] of Object.entries(parseFileMapping(input("files")))) {
+    files[id] = await resolveFiles(patterns, workspace, `files.${id}`);
+  }
+  return files;
+}
+async function saveFiles(download, outputs, downloadDir, workspace) {
+  let saved = [];
+  if (download && outputs.some((output) => output.url)) {
+    const paths = await downloadOutputs(outputs, downloadDir);
+    saved = paths.map((file) => displayPath(file, workspace));
+  }
+  setOutput("files", JSON.stringify(saved));
+  return saved;
+}
 async function modelMode({ apiKey, apiSecret, workspace }) {
   const model = parseModel(input("model"), "model");
   const params = parseMapping(input("params"), "params");
-  const prompt = input("prompt");
-  if (prompt) {
-    if ("prompt" in params) {
-      throw new InputError("The prompt is set in both `prompt` and `params`. Use one of them.");
-    }
-    params.prompt = prompt;
-  }
+  promptInto(params, input("prompt"));
   if (input("system")) {
     warning(
       "`system` is used in llm mode only. In model mode, set the model's own system prompt parameter in `params`."
     );
   }
-  const files = {};
-  for (const [id, patterns] of Object.entries(parseFileMapping(input("files")))) {
-    files[id] = await resolveFiles(patterns, workspace, `files.${id}`);
+  const files = await fileMapping(workspace);
+  const options = taskOptions(workspace);
+  const api = createRunApi({ apiUrl: options.apiUrl, apiKey, apiSecret });
+  const tool = await readTool(api, model, log, "The price is not checked before the run.");
+  if (tool) {
+    const filled = requiredDefaults(tool, params, files);
+    if (Object.keys(filled).length) {
+      Object.assign(params, filled);
+      const list = Object.entries(filled).map(([id, value]) => `${id}: ${JSON.stringify(value)}`);
+      info(`Required parameters you left out get their defaults: ${list.join(", ")}.`);
+    }
   }
-  const timeoutMs = parseSeconds(input("timeout"), "timeout", DEFAULTS.timeout) * 1e3;
-  const pollMs = parseSeconds(input("poll-interval"), "poll-interval", DEFAULTS["poll-interval"]) * 1e3;
-  const cancelOnTimeout = parseBoolean(input("cancel-on-timeout"), "cancel-on-timeout", DEFAULTS["cancel-on-timeout"]);
-  const download = parseBoolean(input("download"), "download", DEFAULTS.download);
-  const downloadDir = path9.resolve(workspace, input("download-dir") || DEFAULTS["download-dir"]);
-  const summary2 = parseBoolean(input("summary"), "summary", DEFAULTS.summary);
-  const apiUrl = parseBaseUrl(input("api-url"), "api-url", DEFAULTS["api-url"]);
-  const api = createRunApi({ apiUrl, apiKey, apiSecret });
+  const price = tool ? priceModelRun(tool, params, files) : { kind: "unknown" };
+  reportEstimate(sumEstimate([{ label: model.id, tool, price }]), options.maxCost, "The run");
   let handle;
   let pending;
-  const unwatch = cancelOnTimeout ? stopTaskOnCancel(
-    api,
-    () => handle,
-    () => pending
-  ) : () => {
+  const unwatch = options.cancelOnTimeout ? stopOnCancel({
+    current: () => handle,
+    pending: () => pending,
+    isOver: (task) => Boolean(task.status && TERMINAL_STATUSES.has(task.status)),
+    stop: (task) => stopTask(api, task, log, { timeoutMs: 2500 }),
+    name: (task) => `task ${task.taskId}`
+  }) : () => {
   };
   let result;
   try {
@@ -30606,10 +31418,11 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
       model,
       params,
       files,
-      timeoutMs,
-      pollMs,
-      cancelOnTimeout,
+      timeoutMs: options.timeoutMs,
+      pollMs: options.pollMs,
+      cancelOnTimeout: options.cancelOnTimeout,
       log,
+      tool: tool ?? void 0,
       onSubmit: (submitting) => {
         pending = submitting;
       },
@@ -30627,17 +31440,12 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
   setOutput("url", result.urls[0] ?? "");
   setOutput("text", result.text);
   setOutput("cost", result.cost);
-  let saved = [];
-  if (download && result.urls.length) {
-    const paths = await downloadOutputs(result.outputs, downloadDir);
-    saved = paths.map((file) => displayPath(file, workspace));
-  }
-  setOutput("files", JSON.stringify(saved));
+  const saved = await saveFiles(options.download, result.outputs, options.downloadDir, workspace);
   info(`Task ${result.handle.taskId} succeeded. Cost: $${result.cost || "0"}.`);
-  for (const url of result.urls) info(`Output: ${url}`);
+  for (const url of result.urls) info(`Output: ${oneLine(url)}`);
   for (const file of saved) info(`Saved: ${file}`);
   if (result.text) printUntrusted("Text", result.text);
-  if (summary2) {
+  if (options.summary) {
     await writeSummary(
       modelSummary({
         modelId: model.id,
@@ -30646,6 +31454,87 @@ async function modelMode({ apiKey, apiSecret, workspace }) {
         elapsedSeconds: result.elapsedSeconds,
         outputs: result.outputs,
         text: result.text,
+        files: saved
+      })
+    );
+  }
+}
+async function workflowMode({ apiKey, apiSecret, workspace }) {
+  const slug = parseWorkflowSlug(input("workflow"));
+  const params = parseMapping(input("params"), "params");
+  promptInto(params, input("prompt"));
+  if (input("model")) warning("`model` is not used in workflow mode; the workflow chooses its models.");
+  if (input("system")) warning("`system` is used in llm mode only.");
+  const files = await fileMapping(workspace);
+  const options = taskOptions(workspace);
+  const api = createRunApi({ apiUrl: options.apiUrl, apiKey, apiSecret });
+  const detail = await api.workflowDetail(slug);
+  const workflow = Array.isArray(detail?.workflow) ? detail.workflow[0] : void 0;
+  if (!workflow) throw new InputError(`Workflow/Detail returned nothing for ${slug}.`);
+  checkWorkflowInputs(workflow, slug, params, Object.keys(files));
+  info(`Workflow: ${workflow.title ? `${oneLine(workflow.title)} (${slug})` : slug}`);
+  const fileStandIns = {};
+  for (const [field, paths] of Object.entries(files)) fileStandIns[field] = paths.length === 1 ? paths[0] : paths;
+  const estimate = await estimateWorkflowCost(
+    api,
+    workflow,
+    startValues(workflow.contents, { ...params, ...fileStandIns }),
+    log
+  );
+  reportEstimate(estimate, options.maxCost, "The workflow run");
+  const runInput = { ...params };
+  for (const [field, paths] of Object.entries(files)) {
+    const urls = [];
+    for (const file of paths) urls.push((await api.uploadFile(file)).url);
+    runInput[field] = urls.length === 1 ? urls[0] : urls;
+    info(`Uploaded ${oneLine(paths.map((file) => displayPath(file, workspace)).join(", "))} for \`${field}\`.`);
+  }
+  let handle;
+  const onSignal = (signal) => {
+    const over = handle?.status && TERMINAL_RUN_STATUSES.has(handle.status);
+    if (handle && !over) warning(`Received ${signal}. ${RUN_GOES_ON}`);
+    process.exit(1);
+  };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+  let result;
+  try {
+    result = await runWorkflow({
+      api,
+      slug,
+      input: runInput,
+      timeoutMs: options.timeoutMs,
+      pollMs: options.pollMs,
+      log,
+      onRun: (started) => {
+        handle = started;
+        setSecret(started.token);
+        setOutput("run-token", started.token);
+      }
+    });
+  } finally {
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+  }
+  setOutput("outputs", JSON.stringify(result.results));
+  setOutput("urls", JSON.stringify(result.urls));
+  setOutput("url", result.urls[0] ?? "");
+  setOutput("text", result.text);
+  setOutput("cost", result.cost);
+  const saved = await saveFiles(options.download, result.files, options.downloadDir, workspace);
+  info(`The run of ${slug} completed. Cost: $${result.cost || "0"}.`);
+  for (const url of result.urls) info(`Output: ${oneLine(url)}`);
+  for (const file of saved) info(`Saved: ${file}`);
+  if (result.text) printUntrusted("Text", result.text);
+  if (options.summary) {
+    await writeSummary(
+      workflowSummary({
+        slug,
+        title: workflow.title,
+        cost: result.cost,
+        elapsedSeconds: result.elapsedSeconds,
+        nodes: result.nodes,
+        results: result.results,
         files: saved
       })
     );
@@ -30662,13 +31551,16 @@ async function llmMode({ apiKey, apiSecret, workspace }) {
   const timeoutMs = parseSeconds(input("timeout"), "timeout", DEFAULTS.timeout) * 1e3;
   const summary2 = parseBoolean(input("summary"), "summary", DEFAULTS.summary);
   const llmUrl = parseBaseUrl(input("llm-url"), "llm-url", DEFAULTS["llm-url"]);
+  const maxCost = parseMaxCost(input("max-cost"));
   if (parseBoolean(input("download"), "download", DEFAULTS.download)) {
-    warning("`download` is used in model mode only.");
+    warning("`download` is used in model and workflow modes only.");
   }
   const body = await buildChatRequest({ model: model.id, prompt, system, extra, files, workspace });
   if (files.length) {
     printUntrusted(`Attached ${files.length} file(s)`, files.map((file) => displayPath(file, workspace)).join("\n"));
   }
+  const info2 = await fetchModelInfo({ llmUrl, apiKey, apiSecret, model: model.id });
+  reportEstimate(estimateChat({ body, model: info2 }), maxCost, "The request", { upTo: true });
   const result = await runChat({ llmUrl, apiKey, apiSecret, body, timeoutMs, log });
   setOutput("text", result.text);
   setOutput("cost", result.cost);
@@ -30698,9 +31590,10 @@ async function run() {
     setSecret(apiKey);
     const apiSecret = getInput("api-secret");
     if (apiSecret) setSecret(apiSecret);
-    const mode = parseMode(input("mode"));
+    const mode = parseMode(input("mode"), { workflow: input("workflow") });
     const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
     if (mode === "llm") await llmMode({ apiKey, apiSecret, workspace });
+    else if (mode === "workflow") await workflowMode({ apiKey, apiSecret, workspace });
     else await modelMode({ apiKey, apiSecret, workspace });
   } catch (err) {
     setFailed(err instanceof Error ? err.message : String(err));

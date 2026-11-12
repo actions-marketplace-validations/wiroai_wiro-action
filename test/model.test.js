@@ -10,6 +10,7 @@ import {
   formatCost,
   normalizeOutputs,
   readParameterTypes,
+  requiredDefaults,
   runModel,
   stopTask,
   submitRun,
@@ -280,17 +281,48 @@ describe('file uploads', () => {
   it('sends files as given when the parameter list is not available', async () => {
     const log = captureLog();
     const api = createRunApi({ apiUrl: mock.apiUrl, apiKey: API_KEY });
-    const types = await readParameterTypes(api, model('mock/image'), log);
+    const types = await readParameterTypes(api, model('mock/fail'), log);
     assert.equal(types, null);
-    assert.match(log.lines.warning[0], /Could not read the parameters of mock\/image/);
+    assert.match(log.lines.warning[0], /Could not read the parameters of mock\/fail .*Files are sent as given\./);
     const form = await buildMultipart({
       params: { prompt: 'x', options: { a: 1 } },
       files: { inputImage: [path.join(dir, 'photo.png')] },
       types,
-      model: model('mock/image'),
+      model: model('mock/fail'),
     });
     assert.deepEqual([...form.keys()], ['prompt', 'options', 'inputImage']);
     assert.equal(form.get('options'), '{"a":1}');
+  });
+});
+
+describe('requiredDefaults', () => {
+  const tool = {
+    parameters: [
+      {
+        items: [
+          { id: 'prompt', type: 'textarea', required: true, defaultvalue: 'Showcase text' },
+          { id: 'outputFormat', type: 'select', required: true, defaultvalue: 'mp3_44100_128' },
+          { id: 'voice', type: 'select', required: true, defaultvalue: 'alice' },
+          { id: 'samples', type: 'number', required: true, defaultvalue: '1' },
+          { id: 'inputImage', type: 'combinefileinput', required: true, defaultvalue: 'https://example.com/a.png' },
+          { id: 'inputText', type: 'text', required: true, defaultvalue: 'sample' },
+          { id: 'seed', type: 'text', required: true, defaultvalue: '' },
+          { id: 'stability', type: 'float', defaultvalue: '0.5' },
+          { id: 'enhance', type: 'checkbox', required: true, defaultvalue: '--enhance', value: '' },
+          { id: 'watermark', type: 'checkbox', required: true, defaultvalue: 'true', value: 'false' },
+        ],
+      },
+    ],
+  };
+
+  it('fills only required settings that were left out', () => {
+    assert.deepEqual(requiredDefaults(tool, { voice: 'bill' }, {}), {
+      outputFormat: 'mp3_44100_128',
+      samples: '1',
+      watermark: 'false',
+    });
+    assert.deepEqual(requiredDefaults(tool, {}, { samples: ['x'] }).samples, undefined);
+    assert.deepEqual(requiredDefaults(null, {}, {}), {});
   });
 });
 

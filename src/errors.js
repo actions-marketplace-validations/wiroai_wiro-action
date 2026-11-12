@@ -43,3 +43,11 @@ export class LlmError extends Error {
     this.type = type;
   }
 }
+
+/** A run that was not started because its estimated price is above `max-cost`, or can't be confirmed under it. */
+export class CostError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'CostError';
+  }
+}

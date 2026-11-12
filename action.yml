@@ -15,14 +15,19 @@ inputs:
     required: false
     default: ''
   mode:
-    description: '`model` runs a model and waits for the task. `llm` sends one chat request to the Wiro AI LLM gateway.'
+    description: '`model` runs a model and waits for the task. `workflow` runs one of your Wiro AI workflows. `llm` sends one chat request to the Wiro AI LLM gateway. When empty: `workflow` if `workflow` is set, otherwise `model`.'
     required: false
-    default: model
+    default: ''
   model:
-    description: 'The model ID, as `owner/model` from the model page on wiro.ai, for example `pruna/p-image` or `openai/gpt-5-4-mini`.'
-    required: true
+    description: 'model and llm modes: the model ID, as `owner/model` from the model page on wiro.ai, for example `pruna/p-image` or `openai/gpt-5-4-mini`.'
+    required: false
+    default: ''
+  workflow:
+    description: 'workflow mode: the workflow to run, as its full slug, such as `product-ad-a1B2c`, or its link on wiro.ai.'
+    required: false
+    default: ''
   prompt:
-    description: 'llm mode: the message to send (required). model mode: sent as the `prompt` parameter.'
+    description: 'llm mode: the message to send (required). model and workflow modes: sent as the `prompt` parameter or input.'
     required: false
     default: ''
   system:
@@ -30,11 +35,15 @@ inputs:
     required: false
     default: ''
   params:
-    description: 'A JSON or YAML mapping. model mode: the model parameters. llm mode: extra Chat Completions fields such as `max_tokens` or `reasoning_effort`.'
+    description: 'A JSON or YAML mapping. model mode: the model parameters. workflow mode: the workflow inputs. llm mode: extra Chat Completions fields such as `max_tokens` or `reasoning_effort`.'
     required: false
     default: ''
   files:
-    description: 'model mode: a mapping of file parameter to local path, for example `inputImage: assets/photo.png`. llm mode: paths or glob patterns, one per line, to attach to the prompt (text files, PNG, JPEG, GIF, WebP and PDF).'
+    description: 'model and workflow modes: a mapping of file parameter or input to local path, for example `inputImage: assets/photo.png`. llm mode: paths or glob patterns, one per line, to attach to the prompt (text files, PNG, JPEG, GIF, WebP and PDF).'
+    required: false
+    default: ''
+  max-cost:
+    description: 'The most a run may cost, in USD, for example `0.50`. The action estimates the price first and does not start a run whose estimate is higher, or whose price it cannot confirm under the limit.'
     required: false
     default: ''
   timeout:
@@ -42,7 +51,7 @@ inputs:
     required: false
     default: '600'
   poll-interval:
-    description: 'model mode: seconds between task status checks.'
+    description: 'model and workflow modes: seconds between status checks.'
     required: false
     default: '3'
   cancel-on-timeout:
@@ -50,11 +59,11 @@ inputs:
     required: false
     default: 'true'
   download:
-    description: 'model mode: download the output files into `download-dir`.'
+    description: 'model and workflow modes: download the output files into `download-dir`.'
     required: false
     default: 'false'
   download-dir:
-    description: 'model mode: the folder for downloaded files, relative to the workspace.'
+    description: 'model and workflow modes: the folder for downloaded files, relative to the workspace.'
     required: false
     default: wiro-output
   summary:
@@ -73,18 +82,22 @@ inputs:
 outputs:
   task-id:
     description: 'model mode: the Wiro AI task ID.'
+  run-token:
+    description: 'workflow mode: the token of the workflow run. It is masked in the logs.'
   url:
-    description: 'model mode: the URL of the first output file.'
+    description: 'model and workflow modes: the URL of the first output file.'
   urls:
-    description: 'model mode: a JSON array with the URLs of all output files.'
+    description: 'model and workflow modes: a JSON array with the URLs of all output files.'
   files:
-    description: 'model mode: a JSON array with the downloaded file paths, relative to the workspace.'
+    description: 'model and workflow modes: a JSON array with the downloaded file paths, relative to the workspace.'
   outputs:
-    description: "model mode: the task's outputs as a JSON array of objects with `name`, `contenttype`, `size`, `url` and, for LLMs, `content`."
+    description: "model mode: the task's outputs as a JSON array of objects with `name`, `contenttype`, `size`, `url` and, for LLMs, `content`. workflow mode: a JSON object with each result of the workflow's End node, as a list of files (`name`, `contenttype`, `size`, `url`) and texts (`text`)."
   text:
-    description: 'The text answer: the reply in llm mode. In model mode, the answer of an LLM, or the text file a model returns, such as a transcript.'
+    description: 'The text answer: the reply in llm mode. In model mode, the answer of an LLM, or the text file a model returns, such as a transcript. In workflow mode, the text results.'
   cost:
     description: The amount billed for the run, in USD.
+  estimated-cost:
+    description: 'The price estimated before the run, in USD. Empty when it is not known before the run. In llm mode it is an upper estimate.'
   response:
     description: 'llm mode: the full Chat Completions response as JSON.'
 
