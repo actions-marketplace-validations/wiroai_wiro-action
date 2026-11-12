@@ -89,6 +89,10 @@ Build a workflow on [wiro.ai/workflows](https://wiro.ai/workflows), then pass it
 - The action waits for the run and logs each step as it starts and ends. If a step fails, the action fails and names the step and the reason. When `timeout` runs out, the action stops waiting and fails; the run itself goes on, and its results appear on wiro.ai when it ends. Give long workflows a generous `timeout`.
 - The `outputs` output is a JSON object with each result of the End node, by name. Files are also in `urls` and can be downloaded with `download: true`; texts, such as an LLM's answer, are in `text`.
 
+The log of a real run of a three-step workflow:
+
+![GitHub Actions log of a workflow run: the estimated cost, each step as it runs and completes, the final cost and the saved image](https://raw.githubusercontent.com/wiroai/Wiro-Action/main/.github/assets/screenshots/workflow-mode-log.png)
+
 ## LLM mode
 
 Set `mode: llm` and pick a model from the [LLM catalog](https://wiro.ai/models?categories=llm-tool-call). `files` takes paths or glob patterns, one per line:
@@ -132,6 +136,10 @@ Set `max-cost` to the most a run may cost, in USD. A run whose estimate is highe
       resolution: 720p
     max-cost: '0.20' # this run is estimated at $0.25, so it does not start
 ```
+
+The log of that run:
+
+![GitHub Actions log: the estimated cost is $0.25, so the run does not start because it is above max-cost $0.20](https://raw.githubusercontent.com/wiroai/Wiro-Action/main/.github/assets/screenshots/cost-limit-log.png)
 
 ## Examples
 
@@ -186,6 +194,10 @@ jobs:
           SUMMARY: ${{ steps.summary.outputs.text }}
         run: printf '%s\n' "$SUMMARY" | gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file -
 ```
+
+The comment it posted on a pull request in a real run:
+
+![A pull request comment from github-actions with a short summary of the changes and the points a reviewer should look at](https://raw.githubusercontent.com/wiroai/Wiro-Action/main/.github/assets/screenshots/pr-summary-comment.png)
 
 ### Write alt text for changed images
 
@@ -302,6 +314,10 @@ jobs:
           cp "$(jq -r '.[0]' <<< "$VIDEO")" release-video.mp4
           gh release upload "$TAG" release-banner.jpg release-video.mp4 --repo "$GITHUB_REPOSITORY"
 ```
+
+The video step in a real run:
+
+![GitHub Actions log of the video step: the estimated cost of $0.125, the task on pruna/p-video-2 and its status, the final cost and the saved video](https://raw.githubusercontent.com/wiroai/Wiro-Action/main/.github/assets/screenshots/model-mode-log.png)
 
 ### Read the release notes aloud
 
